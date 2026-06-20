@@ -1,0 +1,499 @@
+from uuid import UUID
+
+from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi.responses import FileResponse, StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.database import get_db
+from app.schemas.api import (
+    CampaignCreate,
+    CampaignOut,
+    CampaignNpcListOut,
+    CharacterCreate,
+    CharacterOut,
+    PlayerAction,
+    PregenCreate,
+    ProgressionOptionsOut,
+    ProgressionSkill,
+    ProgressionTalent,
+    QuickRollRequest,
+    QuickRollResponse,
+    RollRequest,
+    RollResponse,
+    ImageJobOut,
+    SessionDetailOut,
+    SessionOut,
+    SessionStart,
+    SessionTurnOut,
+    SkillCatalogOut,
+    TurnResponse,
+)
+from app.services.campaign import (
+    create_campaign,
+    get_active_session,
+    get_campaign,
+    list_campaign_npcs,
+    list_campaigns,
+    mark_campaign_completed,
+)
+from app.services.character import (
+    PRE_GENERATED_CHARACTERS,
+    create_character,
+    create_from_pregen,
+    get_character,
+    get_progression_options,
+    list_characters,
+    purchase_skill_advance,
+    purchase_talent,
+)
+from app.services.gm_orchestrator import GMOrchestrator
+from app.services.session import (
+    pause_session,
+    resume_session,
+    session_time_remaining_minutes,
+    start_session,
+)
+
+router = APIRouter()
+gm = GMOrchestrator()
+
+
+def _campaign_out(c, active_session=None) -> CampaignOut:
+    return CampaignOut(
+        id=c.id,
+        character_id=c.character_id,
+        status=c.status.value,
+        tone=c.tone,
+        opening_location=c.opening_location,
+        world_state=c.world_state,
+        created_at=c.created_at,
+        character_name=c.character.name if c.character else None,
+        active_session_id=active_session.id if active_session else None,
+        active_session_paused=bool(active_session and active_session.paused_at is not None),
+        active_session_time_remaining=session_time_remaining_minutes(active_session) if active_session else None,
+    )
+
+
+async def _campaign_out_with_session(db: AsyncSession, c) -> CampaignOut:
+    active = await get_active_session(db, c.id)
+    return _campaign_out(c, active)
+
+
+def _session_out(s) -> SessionOut:
+    return SessionOut(
+        id=s.id,
+        campaign_id=s.campaign_id,
+        mode=s.mode.value,
+        is_active=s.is_active,
+        is_first_session=s.is_first_session,
+        duration_minutes=s.duration_minutes,
+        time_remaining_minutes=session_time_remaining_minutes(s),
+        started_at=s.started_at,
+        turn_phase=s.turn_phase,
+        combat_state=s.combat_state,
+        paused_at=s.paused_at,
+    )
+
+
+def _turn_response(result, session) -> TurnResponse:
+    return TurnResponse(
+        narrative=result.narrative,
+        roll_results=result.roll_results,
+        images=result.images,
+        session_ended=result.session_ended,
+        xp_awarded=result.xp_awarded,
+        player_summary=result.player_summary,
+        time_remaining_minutes=session_time_remaining_minutes(session) if session else 0,
+        mode=session.mode.value if session else "EXPLORACAO",
+        turn_phase=session.turn_phase if session else "normal",
+        pending_test=session.pending_test if session else None,
+        combat_state=session.combat_state if session else None,
+    )
+
+
+def _session_detail(session, campaign) -> SessionDetailOut:
+    base = _session_out(session)
+    return SessionDetailOut(
+        **base.model_dump(),
+        character_id=campaign.character_id if campaign else None,
+        character_name=campaign.character.name if campaign and campaign.character else None,
+        opening_location=campaign.opening_location if campaign else None,
+        tone=campaign.tone if campaign else None,
+    )
+
+
+@router.get("/rules/skills", response_model=SkillCatalogOut)
+async def api_list_skills():
+    from app.rules.skills import list_skills
+
+    return {"skills": list_skills()}
+
+
+@router.get("/characters/pregen")
+async def list_pregen():
+    return [
+        {"index": i, "name": c["name"], "background": c["background"], "career": c["careers"][0]["name"]}
+        for i, c in enumerate(PRE_GENERATED_CHARACTERS)
+    ]
+
+
+@router.post("/characters", response_model=CharacterOut)
+async def api_create_character(body: CharacterCreate, db: AsyncSession = Depends(get_db)):
+    char = await create_character(db, body.model_dump())
+    return char
+
+
+@router.post("/characters/pregen", response_model=CharacterOut)
+async def api_create_pregen(body: PregenCreate, db: AsyncSession = Depends(get_db)):
+    try:
+        return await create_from_pregen(db, body.template_index, body.name)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.get("/characters", response_model=list[CharacterOut])
+async def api_list_characters(db: AsyncSession = Depends(get_db)):
+    return await list_characters(db)
+
+
+@router.get("/characters/{character_id}", response_model=CharacterOut)
+async def api_get_character(character_id: UUID, db: AsyncSession = Depends(get_db)):
+    char = await get_character(db, character_id)
+    if not char:
+        raise HTTPException(404, "Personagem não encontrado")
+    return char
+
+
+@router.post("/characters/{character_id}/progression/skill", response_model=CharacterOut)
+async def api_progression_skill(
+    character_id: UUID, body: ProgressionSkill, db: AsyncSession = Depends(get_db)
+):
+    try:
+        return await purchase_skill_advance(db, character_id, body.skill_name, body.linked_attribute)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.post("/characters/{character_id}/progression/talent", response_model=CharacterOut)
+async def api_progression_talent(
+    character_id: UUID, body: ProgressionTalent, db: AsyncSession = Depends(get_db)
+):
+    try:
+        return await purchase_talent(db, character_id, body.talent_name)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.get("/characters/{character_id}/progression", response_model=ProgressionOptionsOut)
+async def api_progression_options(character_id: UUID, db: AsyncSession = Depends(get_db)):
+    try:
+        opts = await get_progression_options(db, character_id)
+        return ProgressionOptionsOut(
+            character_id=character_id,
+            xp_available=opts["xp_available"],
+            skills=opts["skills"],
+            talents=opts["talents"],
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.post("/campaigns", response_model=CampaignOut)
+async def api_create_campaign(body: CampaignCreate, db: AsyncSession = Depends(get_db)):
+    try:
+        c = await create_campaign(db, body.character_id)
+        return _campaign_out(c)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.get("/campaigns", response_model=list[CampaignOut])
+async def api_list_campaigns(db: AsyncSession = Depends(get_db)):
+    campaigns = await list_campaigns(db)
+    result = []
+    for c in campaigns:
+        result.append(await _campaign_out_with_session(db, c))
+    return result
+
+
+@router.get("/campaigns/{campaign_id}", response_model=CampaignOut)
+async def api_get_campaign(campaign_id: UUID, db: AsyncSession = Depends(get_db)):
+    c = await get_campaign(db, campaign_id)
+    if not c:
+        raise HTTPException(404, "Campanha não encontrada")
+    return await _campaign_out_with_session(db, c)
+
+
+@router.post("/campaigns/{campaign_id}/complete", response_model=CampaignOut)
+async def api_complete_campaign(campaign_id: UUID, db: AsyncSession = Depends(get_db)):
+    try:
+        c = await mark_campaign_completed(db, campaign_id)
+        return _campaign_out(c)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.get("/campaigns/{campaign_id}/active-session", response_model=SessionOut)
+async def api_campaign_active_session(campaign_id: UUID, db: AsyncSession = Depends(get_db)):
+    session = await get_active_session(db, campaign_id)
+    if not session:
+        raise HTTPException(404, "Nenhuma sessão ativa")
+    return _session_out(session)
+
+
+@router.post("/campaigns/{campaign_id}/sessions", response_model=SessionOut)
+async def api_start_session(
+    campaign_id: UUID, body: SessionStart, db: AsyncSession = Depends(get_db)
+):
+    try:
+        s = await start_session(db, campaign_id, body.duration_minutes)
+        return _session_out(s)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.post("/sessions/{session_id}/turn", response_model=TurnResponse)
+async def api_session_turn(
+    session_id: UUID, body: PlayerAction, db: AsyncSession = Depends(get_db)
+):
+    try:
+        result = await gm.process_turn(db, session_id, body.action)
+        from sqlalchemy import select
+        from app.db.models import GameSession
+
+        session = await db.scalar(select(GameSession).where(GameSession.id == session_id))
+        return _turn_response(result, session)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.post("/sessions/{session_id}/turn/stream")
+async def api_session_turn_stream(
+    session_id: UUID, body: PlayerAction, db: AsyncSession = Depends(get_db)
+):
+    try:
+        return StreamingResponse(
+            gm.stream_turn(db, session_id, body.action),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.post("/sessions/{session_id}/roll", response_model=RollResponse)
+async def api_session_roll(
+    session_id: UUID,
+    body: RollRequest = Body(default_factory=RollRequest),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import select
+    from app.db.models import GameSession
+
+    roll_override = body.roll
+    try:
+        result = await gm.execute_roll(db, session_id, roll_override=roll_override)
+        session = await db.scalar(select(GameSession).where(GameSession.id == session_id))
+        return RollResponse(
+            roll_results=result.roll_results,
+            turn_phase=session.turn_phase if session else "awaiting_narrate",
+            mode=session.mode.value if session else "EXPLORACAO",
+            combat_state=session.combat_state if session else None,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.post("/sessions/{session_id}/roll/narrate", response_model=TurnResponse)
+async def api_session_roll_narrate(session_id: UUID, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    from app.db.models import GameSession
+
+    try:
+        result = await gm.narrate_roll(db, session_id)
+        session = await db.scalar(select(GameSession).where(GameSession.id == session_id))
+        return _turn_response(result, session)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.post("/sessions/{session_id}/roll/narrate/stream")
+async def api_session_roll_narrate_stream(
+    session_id: UUID, db: AsyncSession = Depends(get_db)
+):
+    try:
+        return StreamingResponse(
+            gm.stream_narrate_roll(db, session_id),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.get("/sessions/{session_id}", response_model=SessionDetailOut)
+async def api_get_session(session_id: UUID, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+    from app.db.models import Campaign, GameSession
+
+    session = await db.scalar(
+        select(GameSession)
+        .where(GameSession.id == session_id)
+        .options(selectinload(GameSession.campaign).selectinload(Campaign.character))
+    )
+    if not session:
+        raise HTTPException(404, "Sessão não encontrada")
+    return _session_detail(session, session.campaign)
+
+
+@router.post("/sessions/{session_id}/pause", response_model=SessionDetailOut)
+async def api_pause_session(session_id: UUID, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+    from app.db.models import Campaign, GameSession
+
+    session = await db.scalar(
+        select(GameSession)
+        .where(GameSession.id == session_id)
+        .options(selectinload(GameSession.campaign).selectinload(Campaign.character))
+    )
+    if not session:
+        raise HTTPException(404, "Sessão não encontrada")
+    try:
+        session = await pause_session(db, session)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return _session_detail(session, session.campaign)
+
+
+@router.post("/sessions/{session_id}/resume", response_model=SessionDetailOut)
+async def api_resume_session(session_id: UUID, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+    from app.db.models import Campaign, GameSession
+
+    session = await db.scalar(
+        select(GameSession)
+        .where(GameSession.id == session_id)
+        .options(selectinload(GameSession.campaign).selectinload(Campaign.character))
+    )
+    if not session:
+        raise HTTPException(404, "Sessão não encontrada")
+    try:
+        session = await resume_session(db, session)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return _session_detail(session, session.campaign)
+
+
+@router.get("/sessions/{session_id}/history", response_model=list[SessionTurnOut])
+async def api_session_history(session_id: UUID, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    from app.db.models import SessionTurn
+
+    turns = (
+        await db.scalars(
+            select(SessionTurn)
+            .where(SessionTurn.session_id == session_id)
+            .order_by(SessionTurn.created_at)
+        )
+    ).all()
+    return [
+        SessionTurnOut(
+            id=t.id,
+            session_id=t.session_id,
+            role=t.role,
+            content=t.content,
+            metadata=t.metadata_,
+            created_at=t.created_at,
+        )
+        for t in turns
+    ]
+
+
+@router.post("/sessions/{session_id}/quick-roll", response_model=QuickRollResponse)
+async def api_quick_roll(
+    session_id: UUID, body: QuickRollRequest, db: AsyncSession = Depends(get_db)
+):
+    try:
+        return await gm.execute_quick_roll(
+            db, session_id, body.roll_type, body.key, body.modifier, roll_override=body.roll
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.get("/campaigns/{campaign_id}/npcs", response_model=CampaignNpcListOut)
+async def api_campaign_npcs(campaign_id: UUID, db: AsyncSession = Depends(get_db)):
+    campaign = await get_campaign(db, campaign_id)
+    if not campaign:
+        raise HTTPException(404, "Campanha não encontrada")
+    npcs = await list_campaign_npcs(db, campaign_id)
+    return {"npcs": npcs}
+
+
+@router.get("/campaigns/{campaign_id}/diary")
+async def api_diary(campaign_id: UUID, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    from app.db.models import DiaryEntry
+
+    entries = (
+        await db.scalars(
+            select(DiaryEntry)
+            .where(DiaryEntry.campaign_id == campaign_id)
+            .order_by(DiaryEntry.created_at)
+        )
+    ).all()
+    return [{"id": str(e.id), "content": e.content, "created_at": e.created_at.isoformat()} for e in entries]
+
+
+@router.get("/images/{job_id}/file")
+async def api_image_file(job_id: UUID, db: AsyncSession = Depends(get_db)):
+    from app.services.images import get_image_job, image_file_path
+
+    job = await get_image_job(db, job_id)
+    if not job:
+        raise HTTPException(404, "Image job not found")
+    path = image_file_path(job_id)
+    if not path.is_file():
+        raise HTTPException(404, "Image file not found")
+    return FileResponse(path, media_type="image/jpeg")
+
+
+@router.get("/images/{job_id}", response_model=ImageJobOut)
+async def api_image_job(job_id: UUID, db: AsyncSession = Depends(get_db)):
+    from app.services.images import get_image_job, placeholder_url
+
+    job = await get_image_job(db, job_id)
+    if not job:
+        raise HTTPException(404, "Image job not found")
+    return ImageJobOut(
+        id=job.id,
+        status=job.status,
+        image_type=job.image_type,
+        image_url=job.image_url,
+        placeholder_url=placeholder_url(job.image_type),
+    )
+
+
+@router.get("/campaigns/{campaign_id}/map")
+async def api_map(campaign_id: UUID, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    from app.db.models import MapRegion
+
+    regions = (
+        await db.scalars(select(MapRegion).where(MapRegion.campaign_id == campaign_id))
+    ).all()
+    return [
+        {"name": r.name, "description": r.description, "image_url": r.image_url, "revealed": r.revealed}
+        for r in regions
+    ]

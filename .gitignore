@@ -1,0 +1,46 @@
+# Python
+backend/.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# Node
+node_modules/
+package-lock.json
+frontend/.next/
+frontend/out/
+
+# Dice-Box static assets (large binaries; regenerated via: cp -r node_modules/@3d-dice/dice-box/dist/* public/assets/dice-box/)
+frontend/public/assets/dice-box/
+
+# Env
+.env
+.env.local
+*.env.local
+backend/.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated images (Cloudflare Workers AI)
+backend/generated_images/
+
+# AI Agents — transcripts, session state, project-local configs
+.claude/
+.cursor/
+
+# Obsidian — workspace state and personal layout (not vault content)
+.obsidian/
+
+# Claude-Obsidian wiki — auto-generated from Docs/, not source of truth
+.raw/
+.vault-meta/
+wiki/
+WIKI.md

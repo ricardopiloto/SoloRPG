@@ -1,0 +1,68 @@
+{
+  "app": {
+    "title": "WFRP Solo",
+    "tagline": "RPG solo com GM sintético — Warhammer Fantasy Roleplay 4ª Edição"
+  },
+  "nav": {
+    "home": "Início",
+    "characters": "Personagens",
+    "campaigns": "Campanhas",
+    "newCampaign": "Nova campanha"
+  },
+  "home": {
+    "welcome": "Bem-vindo de volta",
+    "emptyTitle": "Sua primeira campanha",
+    "emptyLead": "Crie um personagem e inicie uma campanha para jogar.",
+    "activeCampaign": "Campanha ativa",
+    "history": "Histórico",
+    "resume": "Retomar sessão",
+    "continue": "Continuar",
+    "newCharacter": "Novo personagem"
+  },
+  "session": {
+    "placeholder": "O que você faz?",
+    "pauseHint": "Use ⏸ no topo para pausar.",
+    "exploration": "Exploração",
+    "combat": "Combate",
+    "minutesRemaining": "{count} min restantes",
+    "prepareTitle": "Iniciar sessão",
+    "prepareBody": "Duração estimada: ~{minutes} minutos. Você pode pausar e retomar quando quiser.",
+    "prepareStart": "Começar",
+    "rollDice": "Rolar dado",
+    "rollNow": "Rolar agora",
+    "cancel": "Cancelar",
+    "quickRoll": "Rolagem rápida",
+    "target": "Alvo",
+    "modifier": "Modificador",
+    "gmNarrates": "O Mestre narra…",
+    "pendingTest": "Resolva o teste pendente antes de continuar.",
+    "ended": "Sessão encerrada.",
+    "endBanner": "Sessão encerrada",
+    "endContinue": "Continuar campanha",
+    "endClose": "Encerrar por hoje"
+  },
+  "character": {
+    "fatePoints": "Pontos de Destino",
+    "wounds": "Ferimentos",
+    "xp": "XP",
+    "attributes": "Atributos",
+    "skills": "Perícias",
+    "talents": "Talentos",
+    "inventory": "Inventário"
+  },
+  "end": {
+    "title": "Fim de Sessão",
+    "xpGained": "XP ganho",
+    "progression": "Progressão",
+    "continue": "Continuar campanha"
+  },
+  "death": {
+    "title": "Morte do Personagem",
+    "subtitle": "Campanha inacabada",
+    "newCampaign": "Usar outro personagem",
+    "newCharacter": "Novo personagem"
+  },
+  "diary": {
+    "noNpcs": "Nenhum NPC registrado ainda."
+  }
+}
