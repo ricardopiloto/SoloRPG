@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, String, Text, Uuid, func
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, Uuid, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.config import settings
@@ -107,6 +107,7 @@ class GameSession(Base):
     system_summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     total_paused_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    images_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
     campaign: Mapped[Campaign] = relationship(back_populates="sessions")
     turns: Mapped[list["SessionTurn"]] = relationship(back_populates="session")

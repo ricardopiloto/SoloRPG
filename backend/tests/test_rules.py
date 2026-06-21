@@ -37,14 +37,21 @@ def test_critical_result():
     assert crit.effect
 
 
-def test_fate_point_spend():
-    ok = spend_fate_point(2, 12)
+def test_fate_point_spend_avoid_death():
+    ok = spend_fate_point(2, 8, 12, "avoid_death")
     assert ok.success
     assert ok.fate_remaining == 1
     assert ok.wounds_after == 1
 
-    fail = spend_fate_point(0, 12)
+    fail = spend_fate_point(0, 8, 12, "avoid_death")
     assert not fail.success
+
+
+def test_fate_point_spend_avoid_wound():
+    ok = spend_fate_point(2, 8, 12, "avoid_wound")
+    assert ok.success
+    assert ok.fate_remaining == 1
+    assert ok.wounds_after == 8
 
 
 def test_xp_validation():

@@ -49,9 +49,11 @@ export function useSessionPlay(sessionId: string) {
   const [pendingTest, setPendingTest] = useState<PendingTest | null>(null);
   const pendingRollCtxRef = useRef<
     | { type: "test"; rollId: string }
+    | { type: "fortune-reroll"; rollId: string }
     | { type: "quick"; target: QuickRollTarget; modifier: number; rollId: string }
     | null
   >(null);
+  const [awaitingFortuneDecision, setAwaitingFortuneDecision] = useState(false);
   const [showPrepare, setShowPrepare] = useState(true);
   const [diary, setDiary] = useState<Array<{ content: string }>>([]);
   const [knownNpcs, setKnownNpcs] = useState<CampaignNpc[]>([]);
@@ -252,6 +254,83 @@ export function useSessionPlay(sessionId: string) {
     [runStreamTurn]
   );
 
+  const streamRollNarrate = useCallback(async () => {
+    let streamed = "";
+    let finalResult: TurnResponse | null = null;
+    for await (const event of api.streamRollNarrate(sessionId)) {
+      if (event.type === "token") {
+        streamed += event.content;
+        setEntries((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.kind === "narrative" && last.streaming) {
+            return [
+              ...prev.slice(0, -1),
+              { kind: "narrative", content: streamed, streaming: true },
+            ];
+          }
+          return [...prev, { kind: "narrative", content: streamed, streaming: true }];
+        });
+      } else if (event.type === "done") {
+        finalResult = event;
+      }
+    }
+    if (finalResult) {
+      setEntries((prev) => {
+        const trimmed = prev.filter((e) => !(e.kind === "narrative" && e.streaming));
+        return [...trimmed, { kind: "narrative", content: finalResult!.narrative }];
+      });
+      await applyMeta(finalResult);
+    }
+  }, [sessionId, applyMeta]);
+
+  const applyRollResponse = useCallback(
+    (res: import("@/lib/api").RollResultResponse) => {
+      appendRolls(res.roll_results);
+      if (session) {
+        setSession({
+          ...session,
+          turn_phase: res.turn_phase,
+          mode: res.mode,
+          combat_state: res.combat_state ?? session.combat_state,
+        });
+      }
+      if (character && res.fortune_current != null && res.fortune_max != null) {
+        setCharacter({
+          ...character,
+          fortune_current: res.fortune_current,
+          fortune_max: res.fortune_max,
+        });
+      }
+      return res.roll_results.some((r) => r.success === false);
+    },
+    [session, character, appendRolls]
+  );
+
+  const continueAfterFailedRoll = useCallback(async () => {
+    setAwaitingFortuneDecision(false);
+    setLoading(true);
+    try {
+      await streamRollNarrate();
+    } finally {
+      setLoading(false);
+    }
+  }, [streamRollNarrate]);
+
+  const beginFortuneReroll = useCallback(() => {
+    const rollId = crypto.randomUUID();
+    pendingRollCtxRef.current = { type: "fortune-reroll", rollId };
+    setAwaitingFortuneDecision(false);
+    setEntries((prev) => [
+      ...prev,
+      {
+        kind: "dice-roll" as const,
+        rollId,
+        label: "Re-roll com Fortuna",
+        meta: "d100",
+      },
+    ]);
+  }, []);
+
   const rollTest = useCallback(() => {
     if (!pendingTest) return;
     const rollId = crypto.randomUUID();
@@ -285,41 +364,20 @@ export function useSessionPlay(sessionId: string) {
       try {
         if (ctx.type === "test") {
           const res = await api.rollTest(sessionId, animationRoll);
-          appendRolls(res.roll_results);
-          if (session) {
-            setSession({
-              ...session,
-              turn_phase: res.turn_phase,
-              mode: res.mode,
-              combat_state: res.combat_state ?? session.combat_state,
-            });
+          applyRollResponse(res);
+          if (res.fortune_reroll_available) {
+            setAwaitingFortuneDecision(true);
+            return;
           }
-          let streamed = "";
-          let finalResult: TurnResponse | null = null;
-          for await (const event of api.streamRollNarrate(sessionId)) {
-            if (event.type === "token") {
-              streamed += event.content;
-              setEntries((prev) => {
-                const last = prev[prev.length - 1];
-                if (last?.kind === "narrative" && last.streaming) {
-                  return [
-                    ...prev.slice(0, -1),
-                    { kind: "narrative", content: streamed, streaming: true },
-                  ];
-                }
-                return [...prev, { kind: "narrative", content: streamed, streaming: true }];
-              });
-            } else if (event.type === "done") {
-              finalResult = event;
-            }
+          await streamRollNarrate();
+        } else if (ctx.type === "fortune-reroll") {
+          const res = await api.fortuneReroll(sessionId, animationRoll);
+          applyRollResponse(res);
+          if (res.fortune_reroll_available) {
+            setAwaitingFortuneDecision(true);
+            return;
           }
-          if (finalResult) {
-            setEntries((prev) => {
-              const trimmed = prev.filter((e) => !(e.kind === "narrative" && e.streaming));
-              return [...trimmed, { kind: "narrative", content: finalResult!.narrative }];
-            });
-            await applyMeta(finalResult);
-          }
+          await streamRollNarrate();
         } else if (ctx.type === "quick") {
           const res = await api.quickRoll(
             sessionId,
@@ -350,7 +408,7 @@ export function useSessionPlay(sessionId: string) {
         setLoading(false);
       }
     },
-    [sessionId, session, appendRolls, applyMeta]
+    [sessionId, session, character, applyRollResponse, streamRollNarrate]
   );
 
   const quickRoll = useCallback((target: QuickRollTarget, modifier: number): Promise<void> => {
@@ -397,6 +455,7 @@ export function useSessionPlay(sessionId: string) {
     entries,
     loading,
     pendingTest,
+    awaitingFortuneDecision,
     diceRolling,
     showPrepare,
     diary,
@@ -406,6 +465,8 @@ export function useSessionPlay(sessionId: string) {
     beginSession,
     sendAction,
     rollTest,
+    beginFortuneReroll,
+    continueAfterFailedRoll,
     handleDiceRollComplete,
     quickRoll,
     pauseSession,

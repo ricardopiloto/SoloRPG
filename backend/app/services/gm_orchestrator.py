@@ -134,6 +134,7 @@ class GMOrchestrator:
         payloads = pending.get("all_payloads") or [pending.get("payload", {})]
 
         roll_texts = []
+        wounds_before = character.wounds_current
         for payload in payloads:
             roll_data = self._resolve_test_signal(character, payload, roll_override=roll_override)
             result.roll_results.append(roll_data)
@@ -145,9 +146,56 @@ class GMOrchestrator:
             "roll_texts": roll_texts,
             "setup_narrative": pending.get("setup_narrative", ""),
             "payloads": payloads,
+            "wounds_before": wounds_before,
+            "fortune_reroll_used": False,
         }
         session.pending_test = None
         session.turn_phase = "awaiting_narrate"
+        await db.commit()
+
+        result.turn_phase = session.turn_phase
+        result.combat_state = session.combat_state
+        return result
+
+    async def execute_fortune_reroll(
+        self, db: AsyncSession, session_id: UUID, roll_override: int | None = None
+    ) -> TurnResult:
+        session = await self._load_session(db, session_id)
+        if session.turn_phase != "awaiting_narrate" or not session.pending_roll_result:
+            raise ValueError("Nenhum teste aguardando re-roll com Fortuna")
+
+        campaign = session.campaign
+        character = campaign.character
+        stored = session.pending_roll_result
+        prior_results = stored.get("roll_results", [])
+        if not any(r.get("success") is False for r in prior_results):
+            raise ValueError("Teste bem-sucedido — Fortuna não aplicável")
+        if stored.get("fortune_reroll_used", False):
+            raise ValueError("Fortuna já usada neste teste — apenas um re-roll permitido")
+
+        fortune = spend_fortune_point(character.fortune_current, "reroll")
+        if not fortune.success:
+            raise ValueError(fortune.message)
+
+        character.fortune_current = fortune.fortune_remaining
+        character.wounds_current = stored.get("wounds_before", character.wounds_current)
+
+        result = TurnResult()
+        roll_texts = []
+        payloads = stored.get("payloads") or []
+        for payload in payloads:
+            roll_data = self._resolve_test_signal(character, payload, roll_override=roll_override)
+            result.roll_results.append(roll_data)
+            roll_texts.append(roll_data["llm_text"])
+            await self._apply_roll_wounds(db, session, campaign, character, roll_data, result)
+
+        session.pending_roll_result = {
+            **stored,
+            "roll_results": result.roll_results,
+            "roll_texts": roll_texts,
+            "wounds_before": stored.get("wounds_before", character.wounds_current),
+            "fortune_reroll_used": True,
+        }
         await db.commit()
 
         result.turn_phase = session.turn_phase
@@ -417,6 +465,8 @@ class GMOrchestrator:
             session.duration_minutes = mins
 
         elif signal.tag == "IMAGEM":
+            if not session.images_enabled:
+                return
             from app.services.images import queue_image, placeholder_url
             image_type = signal.payload.get("tipo", "cena")
             description = signal.payload.get("descricao", "")
@@ -523,21 +573,28 @@ class GMOrchestrator:
     async def _handle_system_action(self, db, session, campaign, character, payload, result):
         tipo = payload.get("tipo")
         if tipo == "usar_ponto_destino":
-            fate = spend_fate_point(character.fate_current, character.wounds_max)
+            motivo = payload.get("motivo", "avoid_death")
+            if motivo not in ("avoid_wound", "avoid_death"):
+                motivo = "avoid_death"
+            fate = spend_fate_point(
+                character.fate_current,
+                character.wounds_current,
+                character.wounds_max,
+                reason=motivo,
+            )
             if fate.success:
                 character.fate_current = fate.fate_remaining
                 character.wounds_current = fate.wounds_after
-                result.roll_results.append({"type": "fate", "message": fate.message})
+                result.roll_results.append({"type": "fate", "message": fate.message, "motivo": motivo})
             await db.commit()
         elif tipo == "usar_ponto_fortuna":
-            effect = payload.get("efeito", "bonus_teste")
+            effect = payload.get("efeito", "reroll")
             fortune = spend_fortune_point(character.fortune_current, effect)
             if fortune.success:
                 character.fortune_current = fortune.fortune_remaining
                 result.roll_results.append({
                     "type": "fortune",
                     "message": fortune.message,
-                    "bonus": fortune.bonus,
                 })
             await db.commit()
         elif tipo == "morte_personagem":

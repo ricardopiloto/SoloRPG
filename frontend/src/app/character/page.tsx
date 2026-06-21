@@ -20,7 +20,6 @@ export default function CharacterPage() {
   const [attributes, setAttributes] = useState<Record<string, number>>({ ...DEFAULT_ATTRS });
   const [woundsMax, setWoundsMax] = useState(10);
   const [fateMax, setFateMax] = useState(2);
-  const [fortuneMax, setFortuneMax] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
@@ -58,7 +57,6 @@ export default function CharacterPage() {
         attributes,
         wounds_max: woundsMax,
         fate_max: fateMax,
-        fortune_max: fortuneMax,
         careers: [{ name: career.trim() || "Aventureiro", tier: 1 }],
         skills: [],
         talents: [],
@@ -176,7 +174,7 @@ export default function CharacterPage() {
               </div>
             </div>
 
-            <div className="grid sm:grid-cols-3 gap-4">
+            <div className="grid sm:grid-cols-2 gap-4">
               <label className="text-sm text-wfrp-muted">
                 Ferimentos máx.
                 <input
@@ -199,18 +197,10 @@ export default function CharacterPage() {
                   onChange={(e) => setFateMax(Number(e.target.value) || 2)}
                 />
               </label>
-              <label className="text-sm text-wfrp-muted">
-                Pontos de Fortuna
-                <input
-                  type="number"
-                  min={0}
-                  max={3}
-                  className="mt-1 w-full bg-wfrp-bg border border-wfrp-border rounded px-3 py-2"
-                  value={fortuneMax}
-                  onChange={(e) => setFortuneMax(Number(e.target.value) || 1)}
-                />
-              </label>
             </div>
+            <p className="text-xs text-wfrp-muted">
+              Pontos de Fortuna são iguais aos de Destino e renovam no início de cada sessão.
+            </p>
 
             <button type="submit" className="btn-primary" disabled={loading || !name.trim()}>
               Criar e continuar

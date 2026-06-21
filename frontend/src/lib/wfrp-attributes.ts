@@ -44,8 +44,12 @@ export function computeSkillTarget(
   return base + (owned?.advances ?? 0);
 }
 
-/** Linked attribute tag + advances; +N omitted when advances === 0. */
+/**
+ * WFRP sheet meta: advances before linked attribute.
+ * @example formatSkillRowMeta("Fel", 4) → "4+[Fel]"
+ * @example formatSkillRowMeta("Ag", 0) → "[Ag]"
+ */
 export function formatSkillRowMeta(linkedAttribute: string, advances: number): string {
   const tag = `[${linkedAttribute}]`;
-  return advances > 0 ? `${tag} +${advances}` : tag;
+  return advances > 0 ? `${advances}+${tag}` : tag;
 }

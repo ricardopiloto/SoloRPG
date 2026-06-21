@@ -19,6 +19,9 @@ COMPOSITION_HINTS: dict[str, str] = {
     "item": "isolated item on dark background, ",
 }
 
+PROBE_PROMPT = "minimal dark fantasy landscape, validation probe"
+PROBE_IMAGE_TYPE = "cena"
+
 
 class CloudflareNotConfigured(Exception):
     pass
@@ -26,6 +29,31 @@ class CloudflareNotConfigured(Exception):
 
 class CloudflareGenerationError(Exception):
     pass
+
+
+def is_quota_or_credit_error(exc: BaseException) -> bool:
+    if isinstance(exc, CloudflareNotConfigured):
+        return True
+    if isinstance(exc, CloudflareGenerationError):
+        msg = str(exc).lower()
+        if "quota" in msg or "tokens esgotados" in msg:
+            return True
+        if "429" in msg or "10000" in msg:
+            return True
+    return False
+
+
+async def probe_image_credits(
+    client: "CloudflareWorkersAIClient | None" = None,
+) -> bool:
+    client = client or CloudflareWorkersAIClient()
+    if not client.enabled:
+        return False
+    try:
+        await client.generate_image(PROBE_PROMPT, PROBE_IMAGE_TYPE)
+        return True
+    except Exception:
+        return False
 
 
 class CloudflareWorkersAIClient:

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ensureDiceBox, preloadDiceBox } from "@/lib/dice/diceBoxHost";
 
 type RollResult = { total: number; success?: boolean; sl?: number };
 
@@ -13,10 +14,21 @@ interface Props {
 }
 
 const STAGE_ID = "wfrp-dice-stage";
+const STAGE_SELECTOR = `#${STAGE_ID}`;
 const HOLD_MS = 1800;
 
+function parseD100(groups: Array<{ value?: number; rolls?: Array<{ value?: number }> }>): number {
+  const raw = (groups?.[0]?.value ?? groups?.[0]?.rolls?.[0]?.value ?? 100) as number;
+  return raw === 0 ? 100 : Math.max(1, Math.min(100, raw));
+}
+
+function buildResult(total: number, target: number | undefined): RollResult {
+  const success = target != null ? total <= target : undefined;
+  const sl = success ? Math.floor((target! - total) / 10) + 1 : 0;
+  return { total, success, sl };
+}
+
 export function DiceOverlay({ visible, label, meta, target, onDone }: Props) {
-  const diceBoxRef = useRef<any>(null);
   const [result, setResult] = useState<RollResult | null>(null);
   const [initializing, setInitializing] = useState(false);
   const onDoneRef = useRef(onDone);
@@ -25,47 +37,11 @@ export function DiceOverlay({ visible, label, meta, target, onDone }: Props) {
   useEffect(() => { onDoneRef.current = onDone; }, [onDone]);
   useEffect(() => { targetRef.current = target; }, [target]);
 
-  // Initialize DiceBox once on mount.
-  // The #STAGE_ID container is always in the DOM so DiceBox can attach its canvas.
+  // Preload DiceBox as soon as the play page mounts (container is always in DOM).
   useEffect(() => {
-    setInitializing(true);
-    void (async () => {
-      try {
-        // Load from pre-built ESM bundle so web worker scripts resolve correctly
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const url = "/assets/dice-box/dice-box.es.min.js";
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mod = await import(/* webpackIgnore: true */ url as any);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-        const DiceBox = (mod as any).default;
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        const box = new DiceBox({
-          assetPath: "/assets/dice-box/assets/",
-          container: `#${STAGE_ID}`,
-          id: "wfrp-dice-canvas",
-          theme: "default",
-          themeColor: "#C9973A",
-          scale: 9,
-          gravity: 1.5,
-          mass: 1,
-          friction: 0.8,
-          restitution: 0.2,
-          lightIntensity: 1.1,
-          enableShadows: true,
-          offscreen: false,
-        });
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        await box.init();
-        diceBoxRef.current = box;
-      } catch (e) {
-        console.error("[DiceOverlay] init failed:", e);
-      } finally {
-        setInitializing(false);
-      }
-    })();
+    preloadDiceBox(STAGE_SELECTOR);
   }, []);
 
-  // Trigger a roll each time visible transitions false → true
   const lastVisibleRef = useRef(false);
   useEffect(() => {
     const was = lastVisibleRef.current;
@@ -73,41 +49,34 @@ export function DiceOverlay({ visible, label, meta, target, onDone }: Props) {
 
     if (visible && !was) {
       setResult(null);
+      setInitializing(true);
       void (async () => {
         try {
-          const box = diceBoxRef.current;
-          if (!box) throw new Error("not ready");
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-          box.clear();
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-          const groups: any[] = await box.roll("1d100");
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-          const raw = (groups?.[0]?.value ?? 100) as number;
-          const total = raw === 0 ? 100 : Math.max(1, Math.min(100, raw));
-          const t = targetRef.current;
-          const success = t != null ? total <= t : undefined;
-          const sl = success ? Math.floor((t! - total) / 10) + 1 : 0;
-          setResult({ total, success, sl });
+          const box = await ensureDiceBox(STAGE_SELECTOR);
+          if (!box) throw new Error("DiceBox unavailable");
+          await box.clear();
+          const groups = await box.roll("1d100");
+          const total = parseD100(groups);
+          setResult(buildResult(total, targetRef.current));
         } catch (e) {
           console.error("[DiceOverlay] roll failed:", e);
-          // Software fallback so the game never freezes
           const total = Math.floor(Math.random() * 100) + 1;
-          const t = targetRef.current;
-          const success = t != null ? total <= t : undefined;
-          const sl = success ? Math.floor((t! - total) / 10) + 1 : 0;
-          setResult({ total, success, sl });
+          setResult(buildResult(total, targetRef.current));
+        } finally {
+          setInitializing(false);
         }
       })();
     }
 
     if (!visible && was) {
       setResult(null);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      try { diceBoxRef.current?.clear?.(); } catch { /* ignore */ }
+      setInitializing(false);
+      void ensureDiceBox(STAGE_SELECTOR).then((box) => {
+        if (box) void box.clear().catch(() => undefined);
+      });
     }
   }, [visible]);
 
-  // Hold result on screen then report to caller
   useEffect(() => {
     if (!result) return;
     const t = setTimeout(() => onDoneRef.current(result.total), HOLD_MS);
@@ -116,19 +85,13 @@ export function DiceOverlay({ visible, label, meta, target, onDone }: Props) {
 
   return (
     <>
-      {/*
-       * Canvas host — always mounted so DiceBox.init() can attach its canvas.
-       * z-index changes: -1 (hidden behind chat) vs 49 (above dark background).
-       * opacity fades in/out for a smooth transition.
-       */}
       <div
         id={STAGE_ID}
         aria-hidden="true"
-        className="absolute inset-0 pointer-events-none transition-opacity duration-300"
+        className="absolute inset-0 pointer-events-none transition-opacity duration-300 dice-overlay-stage"
         style={{ zIndex: visible ? 49 : -1, opacity: visible ? 1 : 0 }}
       />
 
-      {/* Dark backdrop — between chat content and canvas */}
       {visible && (
         <div
           className="absolute inset-0 pointer-events-none"
@@ -136,7 +99,6 @@ export function DiceOverlay({ visible, label, meta, target, onDone }: Props) {
         />
       )}
 
-      {/* Info UI — label, meta, result — above the canvas */}
       {visible && (
         <div
           className="absolute inset-0 flex flex-col pointer-events-none"
@@ -144,7 +106,6 @@ export function DiceOverlay({ visible, label, meta, target, onDone }: Props) {
           aria-live="assertive"
           aria-atomic="true"
         >
-          {/* Roll context at the top */}
           <div className="flex flex-col items-center pt-10 gap-1 px-4 text-center">
             {label && (
               <p className="font-display text-xl text-wfrp-fg drop-shadow">{label}</p>
@@ -156,14 +117,12 @@ export function DiceOverlay({ visible, label, meta, target, onDone }: Props) {
 
           <div className="flex-1" />
 
-          {/* Initializing state */}
-          {initializing && (
+          {initializing && !result && (
             <p className="text-center font-mono text-xs text-wfrp-muted animate-pulse pb-10">
               Preparando dados…
             </p>
           )}
 
-          {/* Result shown after physics settle */}
           {result && (
             <div className="flex flex-col items-center pb-10 gap-1">
               <p className="font-mono text-sm text-wfrp-muted">

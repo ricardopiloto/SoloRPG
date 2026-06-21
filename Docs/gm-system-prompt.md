@@ -341,11 +341,36 @@ Ataque à Distância
 ──────────────────────────────────────
 Uso de Ponto de Destino
 ──────────────────────────────────────
+Pontos de Destino NUNCA se recuperam. Use para evitar ferimento ou sobreviver a golpe mortal.
+
+Evitar ferimento:
 [ACAO_SISTEMA]
 {
   "tipo": "usar_ponto_destino",
-  "motivo": "Critical Hit letal recebido",
+  "motivo": "avoid_wound",
+  "efeito": "Ferimento evitado"
+}
+[/ACAO_SISTEMA]
+
+Sobreviver a golpe mortal:
+[ACAO_SISTEMA]
+{
+  "tipo": "usar_ponto_destino",
+  "motivo": "avoid_death",
   "efeito": "Personagem sobrevive com 1 wound"
+}
+[/ACAO_SISTEMA]
+
+──────────────────────────────────────
+Pontos de Fortuna (re-roll)
+──────────────────────────────────────
+Fortuna renova no início de cada sessão (= Destino atual do jogador). Só serve para re-rolar teste falho — o jogador gasta via interface; NÃO emita bonus +10.
+
+Se narrativamente relevante após re-roll:
+[ACAO_SISTEMA]
+{
+  "tipo": "usar_ponto_fortuna",
+  "efeito": "reroll"
 }
 [/ACAO_SISTEMA]
 

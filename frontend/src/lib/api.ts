@@ -159,6 +159,16 @@ export type StreamEvent =
   | { type: "token"; content: string }
   | ({ type: "done" } & TurnResponse);
 
+export type RollResultResponse = {
+  roll_results: TurnResponse["roll_results"];
+  turn_phase: string;
+  mode: string;
+  combat_state?: CombatState | null;
+  fortune_current?: number | null;
+  fortune_max?: number | null;
+  fortune_reroll_available?: boolean;
+};
+
 export type RollHistoryEntry = {
   label: string;
   roll: number;
@@ -242,12 +252,15 @@ export const api = {
     }
   },
   rollTest: (sessionId: string, roll: number) =>
-    request<{
-      roll_results: TurnResponse["roll_results"];
-      turn_phase: string;
-      mode: string;
-      combat_state?: CombatState | null;
-    }>(`/sessions/${sessionId}/roll`, { method: "POST", body: JSON.stringify({ roll }) }),
+    request<RollResultResponse>(`/sessions/${sessionId}/roll`, {
+      method: "POST",
+      body: JSON.stringify({ roll }),
+    }),
+  fortuneReroll: (sessionId: string, roll: number) =>
+    request<RollResultResponse>(`/sessions/${sessionId}/roll/fortune-reroll`, {
+      method: "POST",
+      body: JSON.stringify({ roll }),
+    }),
   async *streamRollNarrate(sessionId: string): AsyncGenerator<StreamEvent> {
     const res = await fetch(`${API}/api/sessions/${sessionId}/roll/narrate/stream`, {
       method: "POST",

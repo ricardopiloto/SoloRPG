@@ -9,9 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.database import async_session
-from app.db.models import Campaign, ImageJob, MapRegion, PlayerCharacter
+from app.db.models import Campaign, GameSession, ImageJob, MapRegion, PlayerCharacter
 from app.services.cloudflare_workers_ai import (
     CloudflareWorkersAIClient,
+    is_quota_or_credit_error,
 )
 
 logger = logging.getLogger(__name__)
@@ -105,6 +106,16 @@ async def _run_image_job(job_id: UUID) -> None:
             logger.exception("Unhandled error processing image job %s", job_id)
 
 
+async def _set_session_images_enabled(
+    db: AsyncSession, session_id: UUID | None, enabled: bool
+) -> None:
+    if not session_id:
+        return
+    session = await db.scalar(select(GameSession).where(GameSession.id == session_id))
+    if session:
+        session.images_enabled = enabled
+
+
 async def process_image_job(db: AsyncSession, job_id: UUID) -> None:
     job = await db.scalar(select(ImageJob).where(ImageJob.id == job_id))
     if not job or job.status in ("completed", "failed"):
@@ -118,6 +129,7 @@ async def process_image_job(db: AsyncSession, job_id: UUID) -> None:
     if not client.enabled:
         job.status = "failed"
         job.image_url = None
+        await _set_session_images_enabled(db, job.session_id, False)
         await db.commit()
         return
 
@@ -130,6 +142,8 @@ async def process_image_job(db: AsyncSession, job_id: UUID) -> None:
         logger.warning("Image job %s failed (%s): %s", job_id, type(exc).__name__, exc)
         job.status = "failed"
         job.image_url = None
+        if is_quota_or_credit_error(exc):
+            await _set_session_images_enabled(db, job.session_id, False)
 
     await db.commit()
     await _link_job_assets(db, job)

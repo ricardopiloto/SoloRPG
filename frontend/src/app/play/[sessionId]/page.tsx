@@ -23,6 +23,7 @@ export default function PlayPage() {
     entries,
     loading,
     pendingTest,
+    awaitingFortuneDecision,
     diceRolling,
     showPrepare,
     diary,
@@ -32,6 +33,8 @@ export default function PlayPage() {
     beginSession,
     sendAction,
     rollTest,
+    beginFortuneReroll,
+    continueAfterFailedRoll,
     handleDiceRollComplete,
     quickRoll,
     pauseSession,
@@ -128,6 +131,31 @@ export default function PlayPage() {
               }
             }}
           />
+          {awaitingFortuneDecision && (
+            <div className="px-5 pb-3">
+              <div className="test-block">
+                <p className="text-sm text-wfrp-muted mb-3">{t("session.fortuneRerollPrompt")}</p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    className="btn-primary flex-1"
+                    disabled={loading || diceRolling}
+                    onClick={beginFortuneReroll}
+                  >
+                    {t("session.fortuneReroll")}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary flex-1"
+                    disabled={loading || diceRolling}
+                    onClick={() => void continueAfterFailedRoll()}
+                  >
+                    {t("session.continueWithoutFortune")}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {awaitingRoll && (
             <div className="px-5">
               <TestBlock pending={pendingTest} onRoll={rollTest} disabled={loading || diceRolling} />

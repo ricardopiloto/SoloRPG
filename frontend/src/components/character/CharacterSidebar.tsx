@@ -64,6 +64,10 @@ export function CharacterSidebar({
         <span className="text-wfrp-muted">{t("character.fatePoints")}</span>
         <FateGems current={character.fate_current} max={character.fate_max} />
       </div>
+      <div className="flex justify-between items-center py-1 mb-2">
+        <span className="text-wfrp-muted">{t("character.fortunePoints")}</span>
+        <FateGems current={character.fortune_current} max={character.fortune_max} />
+      </div>
 
       <div className="sheet-section-label">{t("character.attributes")}</div>
       <AttributeCards

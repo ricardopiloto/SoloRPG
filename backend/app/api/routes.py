@@ -92,6 +92,7 @@ def _session_out(s) -> SessionOut:
         turn_phase=s.turn_phase,
         combat_state=s.combat_state,
         paused_at=s.paused_at,
+        images_enabled=bool(s.images_enabled),
     )
 
 
@@ -285,25 +286,66 @@ async def api_session_turn_stream(
         raise HTTPException(400, str(e)) from e
 
 
+def _roll_response(result, session, character=None) -> RollResponse:
+    failed = any(r.get("success") is False for r in result.roll_results)
+    fortune_current = character.fortune_current if character else 0
+    fortune_reroll_used = False
+    if session and session.pending_roll_result:
+        fortune_reroll_used = session.pending_roll_result.get("fortune_reroll_used", False)
+    fortune_reroll_available = (
+        failed and fortune_current > 0 and not fortune_reroll_used
+    )
+    return RollResponse(
+        roll_results=result.roll_results,
+        turn_phase=session.turn_phase if session else "awaiting_narrate",
+        mode=session.mode.value if session else "EXPLORACAO",
+        combat_state=session.combat_state if session else None,
+        fortune_current=character.fortune_current if character else None,
+        fortune_max=character.fortune_max if character else None,
+        fortune_reroll_available=fortune_reroll_available,
+    )
+
+
+async def _session_character(db: AsyncSession, session_id: UUID):
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    from app.db.models import Campaign, GameSession
+
+    session = await db.scalar(
+        select(GameSession)
+        .where(GameSession.id == session_id)
+        .options(selectinload(GameSession.campaign).selectinload(Campaign.character))
+    )
+    character = session.campaign.character if session and session.campaign else None
+    return session, character
+
+
 @router.post("/sessions/{session_id}/roll", response_model=RollResponse)
 async def api_session_roll(
     session_id: UUID,
     body: RollRequest = Body(default_factory=RollRequest),
     db: AsyncSession = Depends(get_db),
 ):
-    from sqlalchemy import select
-    from app.db.models import GameSession
-
     roll_override = body.roll
     try:
         result = await gm.execute_roll(db, session_id, roll_override=roll_override)
-        session = await db.scalar(select(GameSession).where(GameSession.id == session_id))
-        return RollResponse(
-            roll_results=result.roll_results,
-            turn_phase=session.turn_phase if session else "awaiting_narrate",
-            mode=session.mode.value if session else "EXPLORACAO",
-            combat_state=session.combat_state if session else None,
-        )
+        session, character = await _session_character(db, session_id)
+        return _roll_response(result, session, character)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.post("/sessions/{session_id}/roll/fortune-reroll", response_model=RollResponse)
+async def api_fortune_reroll(
+    session_id: UUID,
+    body: RollRequest = Body(default_factory=RollRequest),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await gm.execute_fortune_reroll(db, session_id, roll_override=body.roll)
+        session, character = await _session_character(db, session_id)
+        return _roll_response(result, session, character)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
 

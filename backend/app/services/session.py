@@ -5,8 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import Campaign, CampaignStatus, CharacterStatus, GameSession, SessionMode, SessionTurn
+from app.db.models import Campaign, CampaignStatus, GameSession, PlayerCharacter, SessionMode, SessionTurn
 from app.rules.careers import validate_xp
+from app.rules.fate import refresh_fortune_from_fate
+from app.services.cloudflare_workers_ai import probe_image_credits
 
 
 async def pause_session(db: AsyncSession, session: GameSession) -> GameSession:
@@ -68,6 +70,19 @@ async def start_session(
         started_at=datetime.now(timezone.utc),
     )
     db.add(session)
+    await db.flush()
+
+    character = await db.scalar(
+        select(PlayerCharacter).where(PlayerCharacter.id == campaign.character_id)
+    )
+    if character:
+        character.fortune_current, character.fortune_max = refresh_fortune_from_fate(
+            character.fate_current
+        )
+
+    await db.commit()
+    await db.refresh(session)
+    session.images_enabled = await probe_image_credits()
     await db.commit()
     await db.refresh(session)
     return session

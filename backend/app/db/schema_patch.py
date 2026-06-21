@@ -9,6 +9,11 @@ async def apply_schema_patches(conn: AsyncConnection) -> None:
     if settings.is_postgres:
         await conn.execute(text("ALTER TABLE npcs ADD COLUMN IF NOT EXISTS known_name VARCHAR(120)"))
         await conn.execute(text("ALTER TABLE npcs ADD COLUMN IF NOT EXISTS met_location VARCHAR(200)"))
+        await conn.execute(
+            text(
+                "ALTER TABLE game_sessions ADD COLUMN IF NOT EXISTS images_enabled BOOLEAN NOT NULL DEFAULT false"
+            )
+        )
         return
 
     def _patch_sqlite(sync_conn) -> None:
@@ -18,5 +23,12 @@ async def apply_schema_patches(conn: AsyncConnection) -> None:
             sync_conn.execute(text("ALTER TABLE npcs ADD COLUMN known_name VARCHAR(120)"))
         if "met_location" not in cols:
             sync_conn.execute(text("ALTER TABLE npcs ADD COLUMN met_location VARCHAR(200)"))
+
+        session_rows = sync_conn.execute(text("PRAGMA table_info(game_sessions)")).fetchall()
+        session_cols = {row[1] for row in session_rows}
+        if "images_enabled" not in session_cols:
+            sync_conn.execute(
+                text("ALTER TABLE game_sessions ADD COLUMN images_enabled BOOLEAN NOT NULL DEFAULT 0")
+            )
 
     await conn.run_sync(_patch_sqlite)

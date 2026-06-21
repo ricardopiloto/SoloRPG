@@ -147,11 +147,16 @@ async def test_append_turn_persists_session_turn_row():
         assert turns[0].content == "Entro na taverna"
 
 
-def test_spend_fortune_point_bonus():
-    result = spend_fortune_point(2, "bonus_teste")
+def test_spend_fortune_point_reroll():
+    result = spend_fortune_point(2, "reroll")
     assert result.success
     assert result.fortune_remaining == 1
-    assert result.bonus == 10
+
+
+def test_spend_fortune_point_rejects_bonus():
+    result = spend_fortune_point(2, "bonus_teste")
+    assert not result.success
+    assert result.fortune_remaining == 2
 
 
 def test_spend_fortune_point_empty():

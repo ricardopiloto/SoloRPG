@@ -10,7 +10,6 @@ class CharacterCreate(BaseModel):
     attributes: dict[str, int] = Field(default_factory=dict)
     wounds_max: int = 10
     fate_max: int = 2
-    fortune_max: int = 1
     careers: list[dict] = Field(default_factory=list)
     skills: list[dict] = Field(default_factory=list)
     talents: list[dict] = Field(default_factory=list)
@@ -87,6 +86,7 @@ class SessionOut(BaseModel):
     turn_phase: str = "normal"
     combat_state: dict | None = None
     paused_at: datetime | None = None
+    images_enabled: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -127,6 +127,9 @@ class RollResponse(BaseModel):
     turn_phase: str = "awaiting_narrate"
     mode: str = "EXPLORACAO"
     combat_state: dict | None = None
+    fortune_current: int | None = None
+    fortune_max: int | None = None
+    fortune_reroll_available: bool = False
 
 
 class ProgressionSkill(BaseModel):

@@ -48,6 +48,7 @@ cd backend && .venv/bin/python -m uvicorn app.main:app --reload --port 8000
 ```bash
 cd frontend
 npm install
+npm run prepare:dice
 cp ../.env.example .env.local
 npm run dev
 ```
@@ -81,6 +82,7 @@ DEEPSEEK_API_KEY=sua-chave
 | `docker.sock: no such file` | Use `podman compose up -d` ou `DATABASE_PROFILE=sqlite-dev` |
 | `Connection reset by peer` em `:5432` | Postgres não está rodando — `ss -tlnp \| grep 5432`, ou use sqlite-dev |
 | Backend não sobe | `./scripts/check-dev.sh` |
+| Dado 3D não aparece / `not ready` no console | `cd frontend && npm run prepare:dice` (assets gitignored) |
 | Narrativa mock em vez de DeepSeek | Confirme `LLM_PROVIDER=deepseek` e `DEEPSEEK_API_KEY` no `.env` |
 | Colunas novas não aparecem no sqlite-dev | Apague `backend/wfrp_solo.db` e reinicie o backend (ou deixe o `schema_patch` na subida aplicar `ALTER TABLE`) |
 
@@ -115,7 +117,7 @@ chmod +x scripts/run-tests.sh
 ./scripts/run-tests.sh
 
 # Incluir E2E Playwright (sobe backend mock + Next em portas de teste)
-cd frontend && npm install && npx playwright install chromium
+cd frontend && npm install && npm run prepare:dice && npx playwright install chromium
 RUN_E2E=1 ./scripts/run-tests.sh
 
 # Apenas backend

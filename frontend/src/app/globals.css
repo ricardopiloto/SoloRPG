@@ -181,6 +181,10 @@ body {
     height: 100% !important;
     display: block;
   }
+  .dice-overlay-stage {
+    min-width: 320px;
+    min-height: 280px;
+  }
   .dice-canvas-hidden {
     opacity: 0 !important;
     pointer-events: none !important;

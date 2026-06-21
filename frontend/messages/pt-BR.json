@@ -36,6 +36,9 @@
     "modifier": "Modificador",
     "gmNarrates": "O Mestre narra…",
     "pendingTest": "Resolva o teste pendente antes de continuar.",
+    "fortuneRerollPrompt": "Teste falhou. Gastar Ponto de Fortuna para re-rolar?",
+    "fortuneReroll": "Gastar Fortuna (re-rolar)",
+    "continueWithoutFortune": "Continuar com falha",
     "ended": "Sessão encerrada.",
     "endBanner": "Sessão encerrada",
     "endContinue": "Continuar campanha",
@@ -43,6 +46,7 @@
   },
   "character": {
     "fatePoints": "Pontos de Destino",
+    "fortunePoints": "Pontos de Fortuna",
     "wounds": "Ferimentos",
     "xp": "XP",
     "attributes": "Atributos",
