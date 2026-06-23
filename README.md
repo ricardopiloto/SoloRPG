@@ -1,46 +1,110 @@
 # WFRP Solo
 
-Aplicação web de RPG solo onde uma LLM atua como GM sintético para campanhas WFRP4e.
+Aplicação web de **RPG solo** baseada em **Warhammer Fantasy Roleplay 4ª edição (WFRP4e)**. Uma LLM atua como **Game Master sintético** — narra, reage e conduz campanhas completas com memória persistente entre sessões. O jogador interage **apenas por texto livre**, como numa mesa de RPG real.
+
+**Princípio:** para o jogador, deve ser irrelevante se o mestre é humano ou IA.
+
+---
+
+## Para que serve
+
+| Uso | Descrição |
+|-----|-----------|
+| **Jogar solo** | Campanhas WFRP4e sem grupo ou GM humano |
+| **Sessões pausáveis** | Timer visível; retome de onde parou |
+| **Progressão real** | XP, perícias e talentos entre sessões (regras WFRP4e em código) |
+| **Teste controlado** | Contas isoladas por usuário; fase 1 com pré-gerados + starter automático |
+
+**Loop típico:** login → personagem → campanha → sessão (texto + rolagens) → recap + XP → progressão.
+
+---
 
 ## Stack
 
-- **Frontend:** Next.js 14, TailwindCSS, TypeScript
-- **Backend:** FastAPI, SQLAlchemy, SQLite (dev) ou PostgreSQL + pgvector (prod)
-- **LLM:** DeepSeek por padrão (`deepseek-chat`); adapter suporta mock / Claude
+| Camada | Tecnologia |
+|--------|------------|
+| Frontend | Next.js 14 (App Router), React, TailwindCSS, TypeScript |
+| Backend | Python 3, FastAPI, SQLAlchemy (async) |
+| Banco | SQLite (arquivo `wfrp_solo.db`) |
+| LLM | DeepSeek (`deepseek-chat`) — adapter mock / Anthropic |
+| Imagens | Cloudflare Workers AI (FLUX.1 Schnell), fila assíncrona |
+| Auth | JWT; fase 1: conta fixa `admin` + `ADMIN_PASSWORD` |
+| Deploy | Vercel + Railway (PaaS) ou VPS Debian ([guia](Docs/debian-server-install.md)) |
 
-## Escolha seu setup
+---
 
-| Perfil | Quando usar | Comando |
-|--------|-------------|---------|
-| **sqlite-dev** (default) | Começar rápido, sem Docker | `DATABASE_PROFILE=sqlite-dev` |
-| **postgres** | Docker/Podman local | `docker compose up -d` |
-| **supabase** | Banco remoto | `DATABASE_URL` do Supabase |
+## Como foi desenvolvido
 
-Verifique pré-requisitos:
+O projeto segue metodologia **OpenSpec**: cada feature nasce como proposta em `openspec/changes/`, é implementada com `/openspec-apply` e arquivada quando concluída.
+
+**Convenções:**
+
+- Regras WFRP4e **sempre no backend** — a LLM nunca rola dados nem calcula ferimentos
+- Protocolo de **sinais JSON** (`[TESTE]`, `[IMAGEM]`, `[FIM_SESSAO]`, …) entre LLM e código
+- Interface em **PT-BR** (i18n desde o início)
+- Testes: **pytest** (API + regras) e **Playwright** (loop E2E)
+
+Documentação de produto e prompts em [`Docs/`](Docs/README.md). Especificações ativas em `openspec/changes/`.
+
+---
+
+## Arquitetura
+
+```mermaid
+flowchart LR
+    subgraph Cliente
+        UI[Next.js UI]
+    end
+
+    subgraph Servidor
+        API[FastAPI + JWT]
+        GM[GM Orchestrator]
+        REGRAS[Motor WFRP4e]
+    end
+
+    subgraph Serviços
+        LLM[DeepSeek]
+        IMG[Cloudflare AI]
+    end
+
+    DB[(SQLite wfrp_solo.db)]
+
+    UI -->|REST| API
+    API --> GM
+    GM --> REGRAS
+    GM --> LLM
+    GM --> IMG
+    API --> DB
+    GM --> DB
+```
+
+**Separação:** narrativa = LLM · mecânica = Python · memória = banco.
+
+Detalhes, fluxos de sessão e estrutura de pastas: **[Docs/architecture.md](Docs/architecture.md)**
+
+---
+
+## Instalação local (desenvolvimento)
+
+### Pré-requisitos
 
 ```bash
 chmod +x scripts/check-dev.sh
 ./scripts/check-dev.sh
 ```
 
-## Setup Local (sqlite-dev — recomendado)
+Python 3.11+, Node 20+, npm.
 
 ### 1. Backend
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate   # obrigatório antes de uvicorn/pytest sem caminho completo
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 cp ../.env.example .env
-# Edite .env: DEEPSEEK_API_KEY=sua-chave (ou LLM_PROVIDER=mock para testes)
-DATABASE_PROFILE=sqlite-dev uvicorn app.main:app --reload --port 8000
-```
-
-Sem ativar o venv, use o caminho explícito:
-
-```bash
-cd backend && .venv/bin/python -m uvicorn app.main:app --reload --port 8000
+# Edite: ADMIN_PASSWORD (≥8 chars), DEEPSEEK_API_KEY ou LLM_PROVIDER=mock
+uvicorn app.main:app --reload --port 8000
 ```
 
 ### 2. Frontend
@@ -53,114 +117,105 @@ cp ../.env.example .env.local
 npm run dev
 ```
 
-Acesse http://localhost:3000
+Acesse **http://localhost:3000**
 
-### Setup com PostgreSQL (Docker ou Podman)
+### Login (fase 1)
 
-```bash
-# Docker
-sudo systemctl enable --now docker
-docker compose up -d
+Com `AUTH_MODE=fixed_admin` (padrão), defina `ADMIN_PASSWORD` no `backend/.env` (mín. 8 caracteres) e entre em `/login` **somente com a senha**. O usuário fixo é `admin` (`admin@wfrp-solo.local`).
 
-# Fedora sem Docker — Podman
-sudo dnf install podman podman-compose
-podman compose up -d
-```
+Cadastro e verificação por e-mail ficam desativados na fase 1. Para multi-conta, use `AUTH_MODE=multi_user` (fase 2).
 
-No `backend/.env`:
+### Personagens (fase 1)
 
-```env
-DATABASE_PROFILE=postgres
-LLM_PROVIDER=deepseek
-DEEPSEEK_API_KEY=sua-chave
-```
+Wizard custom **desligado** (`ENABLE_CUSTOM_CHARGEN=false`). Caminhos: **starter** (cadastro) + **pré-gerados** em `/character`.
 
-## Troubleshooting
+---
 
-| Erro | Solução |
-|------|---------|
-| `docker.sock: no such file` | Use `podman compose up -d` ou `DATABASE_PROFILE=sqlite-dev` |
-| `Connection reset by peer` em `:5432` | Postgres não está rodando — `ss -tlnp \| grep 5432`, ou use sqlite-dev |
-| Backend não sobe | `./scripts/check-dev.sh` |
-| Dado 3D não aparece / `not ready` no console | `cd frontend && npm run prepare:dice` (assets gitignored) |
-| Narrativa mock em vez de DeepSeek | Confirme `LLM_PROVIDER=deepseek` e `DEEPSEEK_API_KEY` no `.env` |
-| Colunas novas não aparecem no sqlite-dev | Apague `backend/wfrp_solo.db` e reinicie o backend (ou deixe o `schema_patch` na subida aplicar `ALTER TABLE`) |
+## Variáveis de ambiente (resumo)
 
-Diagnóstico rápido:
+| Variável | Dev | Produção |
+|----------|-----|----------|
+| `APP_ENV` | `development` | `production` |
+| `AUTH_MODE` | `fixed_admin` | `fixed_admin` (fase 1) |
+| `ADMIN_PASSWORD` | senha local ≥8 chars | senha forte ≥8 chars |
+| `DATABASE_URL` | `sqlite+aiosqlite:///./wfrp_solo.db` | caminho absoluto no servidor |
+| `JWT_SECRET` | qualquer | string aleatória ≥32 chars |
+| `EMAIL_PROVIDER` | `mock` | `smtp` (só `multi_user`) |
+| `ENABLE_CUSTOM_CHARGEN` | `false` | `false` |
+| `DEEPSEEK_API_KEY` | sua chave | sua chave |
 
-```bash
-curl http://localhost:8000/health
-# {"status":"ok","database_profile":"sqlite-dev","database_ok":true,"llm_provider":"deepseek"}
-```
+Lista completa: [`.env.example`](.env.example)
 
-## Variáveis de Ambiente
-
-| Variável | Descrição |
-|----------|-----------|
-| `DATABASE_PROFILE` | `sqlite-dev` (default), `postgres`, ou `supabase` |
-| `DATABASE_URL` | Sobrescreve URL do perfil (obrigatório para supabase) |
-| `LLM_PROVIDER` | `deepseek` (default), `mock`, ou `anthropic` |
-| `LLM_MODEL` | `deepseek-chat` (default) |
-| `DEEPSEEK_API_KEY` | Chave API DeepSeek |
-| `ANTHROPIC_API_KEY` | Chave API Anthropic |
-| `CLOUDFLARE_ACCOUNT_ID` | Account ID do Cloudflare (Workers AI) |
-| `CLOUDFLARE_API_TOKEN` | Token com permissão Workers AI; sem credenciais usa placeholder temático |
-| `CLOUDFLARE_AI_MODEL` | Modelo Workers AI (default: `@cf/black-forest-labs/flux-1-schnell`) |
-| `API_BASE_URL` | URL pública do backend para links de imagens (default: `http://localhost:8000`) |
-| `NEXT_PUBLIC_API_URL` | URL do backend (default: http://localhost:8000) |
+---
 
 ## Testes
 
 ```bash
-# Suite local (pytest + build frontend)
-chmod +x scripts/run-tests.sh
 ./scripts/run-tests.sh
-
-# Incluir E2E Playwright (sobe backend mock + Next em portas de teste)
-cd frontend && npm install && npm run prepare:dice && npx playwright install chromium
-RUN_E2E=1 ./scripts/run-tests.sh
-
-# Apenas backend
-cd backend && source .venv/bin/activate && pytest tests/ -q
+RUN_E2E=1 ./scripts/run-tests.sh   # inclui Playwright
 ```
 
-O E2E cobre: pré-gerado → campanha → sessão → rolagem → recap (`frontend/e2e/game-loop.spec.ts`).  
-Validação manual de campanha 3–5 sessões com DeepSeek: [`Docs/mvp-validation-checklist.md`](Docs/mvp-validation-checklist.md).
+Validação manual de campanha: [`Docs/mvp-validation-checklist.md`](Docs/mvp-validation-checklist.md)
+
+---
 
 ## Deploy
 
-- **Frontend:** Vercel (`frontend/`)
-- **Backend:** Railway ou Fly.io (`backend/`)
-- **Banco:** Supabase com extensão pgvector
+| Opção | Guia |
+|-------|------|
+| **VPS Debian/Ubuntu** | [`Docs/debian-server-install.md`](Docs/debian-server-install.md) |
+| **PaaS** (Vercel + Railway) | Mesmas variáveis; backend com SQLite persistente |
 
-## Loop de Jogo
+---
 
-1. Criar ou selecionar personagem (pré-gerado ou customizado)
-2. Iniciar campanha → primeira sessão gera cenário via LLM
-3. Jogar sessão via texto livre (timer visível, pausável)
-4. Rolagens server-side com animação na UI
-5. Fim de sessão → resumo + XP → progressão entre sessões
+## Changelog (últimas versões)
+
+### [Unreleased]
+
+- **Assistente WFRP4e** — wizard multi-step (código pronto, UI desligada na fase 1)
+
+Ver histórico completo: [`CHANGELOG.md`](CHANGELOG.md)
+
+### [0.3.0] — 2026-06-22
+
+- **Login fixo fase 1** — `admin` + `ADMIN_PASSWORD`; register/verify desativados
+- **Autenticação** — JWT, isolamento por conta (`multi_user` na fase 2), personagem starter
+- **Fase 1 chargen** — wizard oculto; só pré-gerados + starter
+- **SQLite-only** — banco único via arquivo `.db`; sem PostgreSQL/Docker
+
+### [0.2.0] — 2026-06-21
+
+- Mecânicas de **Destino e Fortuna** (regras completas + UI)
+- **Dados 3D** (DiceBox) com init robusto
+- **Guarda de créditos** Cloudflare para imagens de sessão
+- **Roster de NPCs** no diário lateral
+- Formato WFRP `4+[Fel]` na sidebar de perícias
+
+### [0.1.0] — 2026-06-20
+
+- **MVP inicial** — loop de jogo WFRP4e com GM sintético (DeepSeek)
+- Backend FastAPI + motor de regras d100, combate, XP
+- Frontend Next.js (chat, sidebars, sessão pausável)
+- Personagens pré-gerados, campanhas, memória narrativa (SQLite + busca Python)
+
+---
 
 ## Documentação
 
-Índice completo: **[Docs/README.md](Docs/README.md)**
+Índice: **[Docs/README.md](Docs/README.md)**
 
-### Guias de desenvolvimento
+| Documento | Conteúdo |
+|-----------|----------|
+| [architecture.md](Docs/architecture.md) | Arquitetura, fluxos, pastas |
+| [product-brief.md](Docs/product-brief.md) | Visão de produto e escopo MVP |
+| [ux-spec.md](Docs/ux-spec.md) | Design visual (grimório, paleta, layout) |
+| [database-schema.md](Docs/database-schema.md) | Schema SQLite + embeddings JSON |
+| [gm-system-prompt.md](Docs/gm-system-prompt.md) | Persona e sinais do GM |
+| [mvp-validation-checklist.md](Docs/mvp-validation-checklist.md) | QA manual campanha 3–5 sessões |
+| [debian-server-install.md](Docs/debian-server-install.md) | Deploy passo a passo em Debian |
 
-- [Ordem de desenvolvimento](Docs/development-order.md) — fases, dependências e propostas OpenSpec
-- [Frontend vs Backend](Docs/frontend-backend-split.md) — responsabilidades, pastas e APIs
-- [Gap protótipo ↔ código](Docs/prototype-gap-analysis.md) — análise Open Design vs frontend atual
+---
 
-### Referência do produto
+## Licença
 
-- [UX spec](Docs/ux-spec.md) — design visual e comportamental
-- [Session flow](Docs/session-flow.md) — fluxos Mermaid
-- [Database schema](Docs/database-schema.md) — PostgreSQL + pgvector
-- [Product brief](Docs/product-brief.md)
-- [System prompt GM](Docs/gm-system-prompt.md)
-- [Pesquisa técnica](Docs/technical-research.md)
-
-### Specs
-
-- OpenSpec (MVP): `openspec/changes/add-wfrp-solo-mvp/`
-- Propostas pendentes: `openspec/changes/` (ver [ordem de desenvolvimento](Docs/development-order.md))
+Projeto pessoal — uso não comercial. WFRP4e é propriedade da Games Workshop / Cubicle 7.

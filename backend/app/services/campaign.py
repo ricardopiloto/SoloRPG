@@ -38,8 +38,14 @@ async def get_campaign(db: AsyncSession, campaign_id: UUID) -> Campaign | None:
     )
 
 
-async def list_campaigns(db: AsyncSession, status: CampaignStatus | None = None) -> list[Campaign]:
-    q = select(Campaign).options(selectinload(Campaign.character)).order_by(Campaign.created_at.desc())
+async def list_campaigns(db: AsyncSession, user_id: UUID, status: CampaignStatus | None = None) -> list[Campaign]:
+    q = (
+        select(Campaign)
+        .join(PlayerCharacter, Campaign.character_id == PlayerCharacter.id)
+        .where(PlayerCharacter.user_id == user_id)
+        .options(selectinload(Campaign.character))
+        .order_by(Campaign.created_at.desc())
+    )
     if status:
         q = q.where(Campaign.status == status)
     return list(await db.scalars(q))

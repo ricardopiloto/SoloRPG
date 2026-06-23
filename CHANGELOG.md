@@ -9,28 +9,107 @@ Versionamento segue o repositório Git — rastreie também as propostas em `ope
 
 ## [Unreleased]
 
-Alterações locais ainda **não commitadas** (desde o clone/sync de 2026-06-20).
+Alterações locais ainda **não commitadas** (desde `74c6086`).
 
 ### Added
 
-- **skill-row-wfrp-advance-format** — formato WFRP `4+[Fel]` na sidebar de perícias (antes `[Fel] +4`)
-  - `formatSkillRowMeta()` atualizado em `frontend/src/lib/wfrp-attributes.ts`
-  - Testes unitários em `frontend/src/lib/wfrp-attributes.test.ts`
-  - Script `npm run test:unit` no frontend
-  - Proposta OpenSpec: `openspec/changes/skill-row-wfrp-advance-format/` ✅ 11/11 tasks
+- **add-wfrp-character-creation-flow** — assistente de criação WFRP4e em etapas (substitui formulário custom livre)
+  - **Backend:** `character_creation.py`, catálogo de espécies (`species.py`), carreiras Tier 1 Core (`careers_catalog.json`), perícias básicas (`skills_basic.py`)
+  - Endpoints: `GET /rules/character-creation`, `GET /rules/careers`, `POST /characters/validate-creation`, `POST /characters` (somente rascunho validado)
+  - Rolagem `2d10+20` ou point-buy (4–18), swap/reroll, XP de criação, derivados (ferimentos, Destino/Fortuna, perícias básicas)
+  - **Background com IA:** `POST /characters/generate-background` + prompt dedicado `Docs/character-background-prompt.md` (mesma LLM, sem prompt de GM)
+  - **Frontend:** `CharacterCreationWizard` na aba **Criar personagem** em `/character`; i18n `chargen.*`
+  - Testes: `test_character_creation.py`, `test_character_background.py`, integração em `test_api_integration.py`
+  - Proposta OpenSpec: `openspec/changes/add-wfrp-character-creation-flow/` — 36/38 tasks (validação manual 4.5/4.6 pendente)
+
+### Fixed
+
+- **GET /rules/careers** — `ResponseValidationError` ao abrir o assistente (`career_class` vs. alias `class` em `CareerSummaryOut`)
+  - `CareerSummaryOut.career_class` com `Field(alias="class")` em `backend/app/schemas/api.py`
+  - Teste `test_api_list_careers_returns_class_field` em `test_api_integration.py`
+
+---
+
+## [0.3.0] — 2026-06-22
+
+Release de **prontidão fase 1** — conta única, SQLite-only, chargen restrito e superfície de auth reduzida para teste controlado.
+
+### Added
+
+- **phase1-fixed-admin-login** — login fixo fase 1
+  - `AUTH_MODE=fixed_admin` (padrão) + `ADMIN_PASSWORD` obrigatório (≥8 chars) no `.env`
+  - Usuário seed `admin` (`admin@wfrp-solo.local`) com personagem starter no startup
+  - `GET /api/auth/config` → `{ auth_mode, login_username, registration_enabled }`
+  - Register, verify e resend retornam **404** em `fixed_admin`
+  - **Frontend:** `/login` só senha; `/register` e `/verify-email` redirecionam para login
+  - Testes: `test_admin_login.py`; E2E com `admin` + `ADMIN_PASSWORD`
+  - Proposta OpenSpec: `openspec/changes/phase1-fixed-admin-login/` ✅ 7/7 tracks
+
+- **add-user-auth** — autenticação JWT e isolamento por conta
+  - Register → verify e-mail → login (modo `multi_user`, fase 2)
+  - Personagem starter automático após verify; dados isolados por usuário
+  - Proposta OpenSpec: `openspec/changes/add-user-auth/`
+
+- **limit-chargen-to-pregen-phase1** — criação custom desligada na fase 1
+  - `ENABLE_CUSTOM_CHARGEN=false`; wizard oculto na UI; API bloqueada
+  - Caminhos ativos: starter + pré-gerados em `/character`
+  - Proposta OpenSpec: `openspec/changes/limit-chargen-to-pregen-phase1/`
+
+### Changed
+
+- **sqlite-only-database** — SQLite como único backend suportado
+  - Removidos PostgreSQL, pgvector e `docker-compose.yml`
+  - Memória semântica via `PythonSearchAdapter` (sem pgvector)
+  - Proposta OpenSpec: `openspec/changes/sqlite-only-database/`
+
+- **phase1-controlled-release-readiness** — documentação e gates de release
+  - README, `.env.example`, `Docs/debian-server-install.md`, checklist MVP
+  - SMTP obrigatório apenas em `AUTH_MODE=multi_user` + production
+
+### Removed
+
+- **add-auth-dev-bypass** — superseded por `phase1-fixed-admin-login`
+  - Removidos usuário `dev@localhost` / `dev` e hint `dev/dev` na UI
+
+---
+
+## [0.2.0] — 2026-06-21
+
+Commit `74c6086` — Destino/Fortuna, dados 3D, guarda de imagens, roster de NPCs no diário.
+
+### Added
+
+- **add-fate-fortune-mechanics** — regras completas de Destino e Fortuna
+  - Destino: evitar ferimento ou morte; nunca recupera
+  - Fortuna: re-roll de teste falho; refresh no início da sessão = `fate_current`
+  - `fortune_*` derivado de `fate_current`; removido bônus legado `+10`
+  - UI: gemas Destino e Fortuna na sidebar; fluxo de gasto em testes
+  - 236 linhas de testes em `test_fate_fortune_mechanics.py`
+  - Proposta OpenSpec: `openspec/changes/add-fate-fortune-mechanics/` — 23/27 tasks
+
+- **fortune-one-reroll-per-test** — um re-roll de Fortuna por teste pendente (server-side)
+  - Proposta OpenSpec: `openspec/changes/fortune-one-reroll-per-test/` — 10/12 tasks
+
+- **fix-dice-overlay-zenbrowser** — init robusto do DiceBox 3D
+  - Singleton `diceBoxHost.ts` com promise de init, dimensões mínimas do stage, fallback RNG
+  - Proposta OpenSpec: `openspec/changes/fix-dice-overlay-zenbrowser/` — 7/9 tasks
 
 - **session-image-credits-guard** — guarda de créditos Cloudflare para geração de imagens
   - Coluna `images_enabled` em `GameSession` + migration `0002_add_images_enabled`
   - `probe_image_credits()` e `is_quota_or_credit_error()` em `cloudflare_workers_ai.py`
-  - Probe síncrono em `start_session()`; guard em `[IMAGEM]` quando desabilitado
-  - Desligamento mid-session em falha de quota; campo na API (`SessionOut`)
+  - Probe em `start_session()`; guard em `[IMAGEM]` quando desabilitado
   - 9 testes em `backend/tests/test_session_image_credits_guard.py`
   - Proposta OpenSpec: `openspec/changes/session-image-credits-guard/` — 18/21 tasks (validação manual CF pendente)
 
-- **add-fate-fortune-mechanics** — proposta OpenSpec (não implementada)
-  - Destino: evitar ferimento ou morte, nunca recupera
-  - Fortuna: re-roll de teste falho, refresh por sessão = `fate_current`
-  - Proposta: `openspec/changes/add-fate-fortune-mechanics/` — 0/27 tasks
+- **add-diary-npc-roster** — roster de NPCs conhecidos na aba Personagem do diário
+  - Campos `known_name` e `met_location` no model `NPC`; `GET /campaigns/{id}/npcs`
+  - `knownNpcs` em `useSessionPlay`; lista na `DiarySidebar`
+  - Proposta OpenSpec: `openspec/changes/add-diary-npc-roster/` — 14/16 tasks (validação manual 5.2/5.3 pendente)
+
+- **skill-row-wfrp-advance-format** — formato WFRP `4+[Fel]` na sidebar de perícias (antes `[Fel] +4`)
+  - `formatSkillRowMeta()` em `frontend/src/lib/wfrp-attributes.ts` + testes unitários
+  - Script `npm run test:unit` no frontend
+  - Proposta OpenSpec: `openspec/changes/skill-row-wfrp-advance-format/` ✅ 11/11 tasks
 
 - **Docs/export-propostas-recentes.md** — export consolidado de propostas recentes
 
@@ -122,17 +201,25 @@ Commit inicial (`de931ad`) — baseline do MVP WFRP Solo entregue no GitHub.
 
 ---
 
-## Status das changes OpenSpec (2026-06-21)
+## Status das changes OpenSpec (2026-06-22)
 
 | Change | Tasks | Status |
 |--------|-------|--------|
-| `skill-row-wfrp-advance-format` | 11/11 | ✅ Completo (local, uncommitted) |
+| `phase1-fixed-admin-login` | 7/7 | ✅ Completo |
+| `sqlite-only-database` | — | ✅ Completo |
+| `limit-chargen-to-pregen-phase1` | — | ✅ Completo |
+| `add-user-auth` | 45/48 | 🟡 Quase completo |
+| `phase1-controlled-release-readiness` | — | 🟡 Em progresso |
+| `add-wfrp-character-creation-flow` | 36/38 | 🟡 Implementado (local) — validação manual pendente |
+| `skill-row-wfrp-advance-format` | 11/11 | ✅ Completo |
 | `session-image-credits-guard` | 18/21 | 🟡 Implementado — validação manual CF pendente |
-| `add-fate-fortune-mechanics` | 0/27 | 📋 Proposta — aguardando `/opsx:apply` |
+| `add-fate-fortune-mechanics` | 23/27 | 🟡 Implementado — validação manual pendente |
+| `fortune-one-reroll-per-test` | 10/12 | 🟡 Implementado — validação manual pendente |
+| `fix-dice-overlay-zenbrowser` | 7/9 | 🟡 Implementado — validação manual pendente |
+| `add-diary-npc-roster` | 14/16 | 🟡 Implementado — validação manual pendente |
 | `add-wfrp-solo-mvp` | 64/66 | 🟡 Quase completo |
 | `add-3d-dice` | 25/29 | 🟡 Em progresso |
 | `upgrade-3d-dice-dsn-fidelity` | 24/26 | 🟡 Em progresso |
-| `add-diary-npc-roster` | 14/16 | 🟡 Em progresso |
 | `add-game-chat-ux` | 16/18 | 🟡 Em progresso |
 | `handle-image-api-failure` | 9/16 | 🟡 Em progresso |
 | `improve-session-end-flow` | 14/19 | 🟡 Em progresso |
@@ -159,5 +246,7 @@ Changes arquivadas em `openspec/changes/archive/2026-06-17-*/` estão incorporad
 
 ---
 
-[Unreleased]: https://github.com/ricardopiloto/SoloRPG/compare/main...HEAD
+[Unreleased]: https://github.com/ricardopiloto/SoloRPG/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/ricardopiloto/SoloRPG/compare/74c6086...v0.3.0
+[0.2.0]: https://github.com/ricardopiloto/SoloRPG/compare/de931ad...74c6086
 [0.1.0]: https://github.com/ricardopiloto/SoloRPG/commit/de931ad

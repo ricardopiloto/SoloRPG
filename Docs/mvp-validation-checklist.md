@@ -6,13 +6,15 @@ Os testes automatizados (pytest + Playwright) usam `LLM_PROVIDER=mock` e não su
 ## Pré-requisitos
 
 - [ ] `./scripts/check-dev.sh` sem falhas críticas
-- [ ] Backend: `DATABASE_PROFILE=sqlite-dev`, `LLM_PROVIDER=deepseek`, chave configurada
+- [ ] Backend: `DATABASE_URL` sqlite, `LLM_PROVIDER=deepseek`, chave configurada
 - [ ] Frontend: `NEXT_PUBLIC_API_URL=http://localhost:8000`
+- [ ] **Conta autenticada** — login em `/login` (fase 1: senha `ADMIN_PASSWORD`; multi_user: register + verify)
+- [ ] Personagem starter presente após login admin (ou após verify em multi_user)
 - [ ] Tempo reservado: ~3–4 h (3–5 sessões de ~45 min cada, ou sessões encurtadas para teste)
 
 ## Sessão 1 — Abertura
 
-- [ ] Criar personagem (pré-gerado ou customizado)
+- [ ] Selecionar personagem pré-gerado em `/character` (fase 1: wizard desligado)
 - [ ] Iniciar campanha; primeira sessão gera `[NOVA_CAMPANHA]` (tom, local, NPCs)
 - [ ] Narrativa coerente com WFRP; GM não quebra personagem (sem meta-comentário)
 - [ ] Pelo menos um `[TESTE]` resolvido com rolagem server-side
@@ -38,11 +40,12 @@ Os testes automatizados (pytest + Playwright) usam `LLM_PROVIDER=mock` e não su
 
 | Área | Aceite |
 |------|--------|
+| Auth | Dados isolados por conta; verify obrigatório em production |
 | GM | Tom sombrio WFRP; rejeita input fora de personagem |
 | Regras | Rolagens sempre server-side; `[TESTE]` antes do resultado |
 | Memória | Resumos de sessão influenciam turnos seguintes |
 | UI | Loop completo sem erro 500; recap e XP ao fim |
-| Docs | README permite setup em &lt; 15 min |
+| Docs | README + [`phase1-release-runbook.md`](phase1-release-runbook.md) permitem setup |
 
 ## Registro de problemas
 

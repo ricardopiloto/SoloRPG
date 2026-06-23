@@ -5,15 +5,6 @@ from datetime import datetime
 from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, Uuid, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from app.config import settings
-
-if settings.is_postgres:
-    from pgvector.sqlalchemy import Vector
-
-    _EMBEDDING_TYPE = Vector(384)
-else:
-    _EMBEDDING_TYPE = JSON
-
 
 class Base(DeclarativeBase):
     pass
@@ -35,10 +26,39 @@ class CharacterStatus(str, enum.Enum):
     DEAD = "morto"
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    characters: Mapped[list["PlayerCharacter"]] = relationship(back_populates="user")
+    verification_codes: Mapped[list["EmailVerificationCode"]] = relationship(back_populates="user")
+
+
+class EmailVerificationCode(Base):
+    __tablename__ = "email_verification_codes"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
+    code_hash: Mapped[str] = mapped_column(String(255))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped[User] = relationship(back_populates="verification_codes")
+
+
 class PlayerCharacter(Base):
     __tablename__ = "player_characters"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id"), nullable=True, index=True)
+    is_starter: Mapped[bool] = mapped_column(Boolean, default=False)
     name: Mapped[str] = mapped_column(String(120))
     status: Mapped[CharacterStatus] = mapped_column(Enum(CharacterStatus), default=CharacterStatus.ALIVE)
     attributes: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -59,6 +79,7 @@ class PlayerCharacter(Base):
     background: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    user: Mapped[User | None] = relationship(back_populates="characters")
     campaigns: Mapped[list["Campaign"]] = relationship(back_populates="character")
 
 
@@ -162,7 +183,7 @@ class NarrativeEvent(Base):
     event_type: Mapped[str] = mapped_column(String(80))
     description: Mapped[str] = mapped_column(Text)
     consequences: Mapped[str | None] = mapped_column(Text, nullable=True)
-    embedding: Mapped[list[float] | None] = mapped_column(_EMBEDDING_TYPE, nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     campaign: Mapped[Campaign] = relationship(back_populates="events")

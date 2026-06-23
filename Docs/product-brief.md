@@ -203,7 +203,7 @@ Ver [Ordem de desenvolvimento](development-order.md) para a sequência completa 
 |---|---------|--------|
 | 1 | System prompt do GM | ✓ Concluído — [`gm-system-prompt.md`](gm-system-prompt.md) |
 | 2 | Motor de regras WFRP4e | ✓ Core — `backend/app/rules/` + testes unitários |
-| 3 | Esquema do banco + memória | ✓ sqlite-dev/postgres; memória semântica + diário/karma |
+| 3 | Esquema do banco + memória | ✓ SQLite; memória semântica Python + diário/karma |
 | 4 | Loop de sessão + DeepSeek | ✓ Adapter DeepSeek; test-block; combate; mock para testes |
 | 5 | Frontend imersivo | ✓ Protótipo OD; quick-roll; Workers AI para imagens |
 | 6 | Qualidade MVP | ✓ pytest API + Playwright E2E + README; checklist manual em [`mvp-validation-checklist.md`](mvp-validation-checklist.md) |

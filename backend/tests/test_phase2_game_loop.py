@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-os.environ["DATABASE_PROFILE"] = "sqlite-dev"
 os.environ["DATABASE_URL"] = ""
 os.environ["LLM_PROVIDER"] = "mock"
 

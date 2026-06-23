@@ -39,8 +39,16 @@ PRE_GENERATED_CHARACTERS = [
 ]
 
 
-async def create_character(db: AsyncSession, data: dict) -> PlayerCharacter:
+async def create_character(
+    db: AsyncSession,
+    data: dict,
+    *,
+    user_id: UUID | None = None,
+    is_starter: bool = False,
+) -> PlayerCharacter:
     char = PlayerCharacter(
+        user_id=user_id,
+        is_starter=is_starter,
         name=data["name"],
         background=data.get("background"),
         attributes=data.get("attributes", {}),
@@ -54,6 +62,8 @@ async def create_character(db: AsyncSession, data: dict) -> PlayerCharacter:
         skills=data.get("skills", []),
         talents=data.get("talents", []),
         trappings=data.get("trappings", []),
+        xp_total=data.get("xp_total", 0),
+        xp_spent=data.get("xp_spent", 0),
     )
     db.add(char)
     await db.commit()
@@ -61,21 +71,29 @@ async def create_character(db: AsyncSession, data: dict) -> PlayerCharacter:
     return char
 
 
-async def create_from_pregen(db: AsyncSession, template_index: int, name: str | None = None) -> PlayerCharacter:
+async def create_from_pregen(
+    db: AsyncSession, template_index: int, name: str | None, user_id: UUID
+) -> PlayerCharacter:
     if template_index < 0 or template_index >= len(PRE_GENERATED_CHARACTERS):
         raise ValueError("Template inválido")
     data = dict(PRE_GENERATED_CHARACTERS[template_index])
     if name:
         data["name"] = name
-    return await create_character(db, data)
+    return await create_character(db, data, user_id=user_id)
 
 
 async def get_character(db: AsyncSession, character_id: UUID) -> PlayerCharacter | None:
     return await db.scalar(select(PlayerCharacter).where(PlayerCharacter.id == character_id))
 
 
-async def list_characters(db: AsyncSession) -> list[PlayerCharacter]:
-    return list(await db.scalars(select(PlayerCharacter).order_by(PlayerCharacter.created_at.desc())))
+async def list_characters(db: AsyncSession, user_id: UUID) -> list[PlayerCharacter]:
+    return list(
+        await db.scalars(
+            select(PlayerCharacter)
+            .where(PlayerCharacter.user_id == user_id)
+            .order_by(PlayerCharacter.created_at.desc())
+        )
+    )
 
 
 async def purchase_skill_advance(

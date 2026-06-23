@@ -4,13 +4,22 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_verified_user, require_custom_chargen_enabled
 from app.db.database import get_db
+from app.db.models import User
 from app.schemas.api import (
+    BackgroundGenerateOut,
+    BackgroundGenerateRequest,
     CampaignCreate,
     CampaignOut,
     CampaignNpcListOut,
+    CareerDetailOut,
+    CareerListOut,
     CharacterCreate,
+    CharacterCreationSubmit,
+    CharacterCreationValidateOut,
     CharacterOut,
+    CreationOptionsOut,
     PlayerAction,
     PregenCreate,
     ProgressionOptionsOut,
@@ -47,6 +56,7 @@ from app.services.character import (
     purchase_talent,
 )
 from app.services.gm_orchestrator import GMOrchestrator
+from app.services.ownership import get_owned_campaign, get_owned_character, get_owned_session
 from app.services.session import (
     pause_session,
     resume_session,
@@ -130,8 +140,111 @@ async def api_list_skills():
     return {"skills": list_skills()}
 
 
+@router.get("/rules/character-creation", response_model=CreationOptionsOut)
+async def api_creation_options():
+    from app.rules.species import creation_options
+
+    return {"options": creation_options()}
+
+
+@router.get("/rules/careers", response_model=CareerListOut)
+async def api_list_careers(tier: int = 1):
+    from app.rules.careers_catalog import list_careers
+
+    careers = list_careers(tier=tier)
+    return {
+        "careers": [
+            {
+                "id": c["id"],
+                "name": c["name"],
+                "career_group": c["career_group"],
+                "class": c["class"],
+                "tier": c.get("tier", 1),
+            }
+            for c in careers
+        ]
+    }
+
+
+@router.get("/rules/careers/{career_id}", response_model=CareerDetailOut)
+async def api_get_career(career_id: str):
+    from app.rules.careers_catalog import get_career
+
+    career = get_career(career_id)
+    if not career:
+        raise HTTPException(404, "Carreira não encontrada")
+    return {
+        "id": career["id"],
+        "name": career["name"],
+        "career_group": career["career_group"],
+        "class": career["class"],
+        "tier": career.get("tier", 1),
+        "skills": career["skills"],
+        "talents": career["talents"],
+        "trappings": career["trappings"],
+    }
+
+
+@router.post("/characters/validate-creation", response_model=CharacterCreationValidateOut)
+async def api_validate_creation(
+    body: CharacterCreationSubmit,
+    _: None = Depends(require_custom_chargen_enabled),
+):
+    from app.rules.character_creation import compute_preview, validate_draft
+
+    draft = body.draft.model_dump()
+    errors = validate_draft(draft, final=False)
+    computed = compute_preview(draft) if draft.get("career_id") else None
+    return {"valid": len(errors) == 0, "errors": errors, "computed": computed}
+
+
+@router.post("/characters/creation/roll-attributes")
+async def api_roll_attributes(_: None = Depends(require_custom_chargen_enabled)):
+    from app.rules.character_creation import roll_all_characteristics
+
+    return {"attributes": roll_all_characteristics()}
+
+
+@router.post("/characters/creation/roll-career")
+async def api_roll_career(
+    body: CharacterCreationSubmit,
+    _: None = Depends(require_custom_chargen_enabled),
+):
+    from app.rules.character_creation import roll_career_for_draft
+
+    return roll_career_for_draft(body.draft.model_dump())
+
+
+@router.post("/characters/creation/roll-species-talent")
+async def api_roll_species_talent(
+    body: CharacterCreationSubmit,
+    _: None = Depends(require_custom_chargen_enabled),
+):
+    from app.rules.character_creation import roll_species_talent
+
+    species_id = body.draft.species_id or "human"
+    return {"talent": roll_species_talent(species_id)}
+
+
+@router.post("/characters/generate-background", response_model=BackgroundGenerateOut)
+async def api_generate_background(
+    body: BackgroundGenerateRequest,
+    user: User = Depends(get_verified_user),
+    _: None = Depends(require_custom_chargen_enabled),
+):
+    from app.services.character_background import generate_background
+
+    try:
+        background = await generate_background(body.model_dump())
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except Exception as e:
+        raise HTTPException(502, f"Falha ao gerar background: {e}") from e
+    return {"background": background}
+
+
 @router.get("/characters/pregen")
-async def list_pregen():
+async def list_pregen(user: User = Depends(get_verified_user)):
     return [
         {"index": i, "name": c["name"], "background": c["background"], "career": c["careers"][0]["name"]}
         for i, c in enumerate(PRE_GENERATED_CHARACTERS)
@@ -139,36 +252,59 @@ async def list_pregen():
 
 
 @router.post("/characters", response_model=CharacterOut)
-async def api_create_character(body: CharacterCreate, db: AsyncSession = Depends(get_db)):
-    char = await create_character(db, body.model_dump())
+async def api_create_character(
+    body: CharacterCreationSubmit,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+    _: None = Depends(require_custom_chargen_enabled),
+):
+    from app.rules.character_creation import draft_to_character_data
+
+    try:
+        data = draft_to_character_data(body.draft.model_dump())
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    char = await create_character(db, data, user_id=user.id)
     return char
 
 
 @router.post("/characters/pregen", response_model=CharacterOut)
-async def api_create_pregen(body: PregenCreate, db: AsyncSession = Depends(get_db)):
+async def api_create_pregen(
+    body: PregenCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
     try:
-        return await create_from_pregen(db, body.template_index, body.name)
+        return await create_from_pregen(db, body.template_index, body.name, user.id)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
 
 
 @router.get("/characters", response_model=list[CharacterOut])
-async def api_list_characters(db: AsyncSession = Depends(get_db)):
-    return await list_characters(db)
+async def api_list_characters(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
+    return await list_characters(db, user.id)
 
 
 @router.get("/characters/{character_id}", response_model=CharacterOut)
-async def api_get_character(character_id: UUID, db: AsyncSession = Depends(get_db)):
-    char = await get_character(db, character_id)
-    if not char:
-        raise HTTPException(404, "Personagem não encontrado")
-    return char
+async def api_get_character(
+    character_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
+    return await get_owned_character(db, user, character_id)
 
 
 @router.post("/characters/{character_id}/progression/skill", response_model=CharacterOut)
 async def api_progression_skill(
-    character_id: UUID, body: ProgressionSkill, db: AsyncSession = Depends(get_db)
+    character_id: UUID,
+    body: ProgressionSkill,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
 ):
+    await get_owned_character(db, user, character_id)
     try:
         return await purchase_skill_advance(db, character_id, body.skill_name, body.linked_attribute)
     except ValueError as e:
@@ -177,8 +313,12 @@ async def api_progression_skill(
 
 @router.post("/characters/{character_id}/progression/talent", response_model=CharacterOut)
 async def api_progression_talent(
-    character_id: UUID, body: ProgressionTalent, db: AsyncSession = Depends(get_db)
+    character_id: UUID,
+    body: ProgressionTalent,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
 ):
+    await get_owned_character(db, user, character_id)
     try:
         return await purchase_talent(db, character_id, body.talent_name)
     except ValueError as e:
@@ -186,7 +326,12 @@ async def api_progression_talent(
 
 
 @router.get("/characters/{character_id}/progression", response_model=ProgressionOptionsOut)
-async def api_progression_options(character_id: UUID, db: AsyncSession = Depends(get_db)):
+async def api_progression_options(
+    character_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
+    await get_owned_character(db, user, character_id)
     try:
         opts = await get_progression_options(db, character_id)
         return ProgressionOptionsOut(
@@ -200,7 +345,12 @@ async def api_progression_options(character_id: UUID, db: AsyncSession = Depends
 
 
 @router.post("/campaigns", response_model=CampaignOut)
-async def api_create_campaign(body: CampaignCreate, db: AsyncSession = Depends(get_db)):
+async def api_create_campaign(
+    body: CampaignCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
+    await get_owned_character(db, user, body.character_id)
     try:
         c = await create_campaign(db, body.character_id)
         return _campaign_out(c)
@@ -209,8 +359,11 @@ async def api_create_campaign(body: CampaignCreate, db: AsyncSession = Depends(g
 
 
 @router.get("/campaigns", response_model=list[CampaignOut])
-async def api_list_campaigns(db: AsyncSession = Depends(get_db)):
-    campaigns = await list_campaigns(db)
+async def api_list_campaigns(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
+    campaigns = await list_campaigns(db, user.id)
     result = []
     for c in campaigns:
         result.append(await _campaign_out_with_session(db, c))
@@ -218,15 +371,22 @@ async def api_list_campaigns(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/campaigns/{campaign_id}", response_model=CampaignOut)
-async def api_get_campaign(campaign_id: UUID, db: AsyncSession = Depends(get_db)):
-    c = await get_campaign(db, campaign_id)
-    if not c:
-        raise HTTPException(404, "Campanha não encontrada")
+async def api_get_campaign(
+    campaign_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
+    c = await get_owned_campaign(db, user, campaign_id)
     return await _campaign_out_with_session(db, c)
 
 
 @router.post("/campaigns/{campaign_id}/complete", response_model=CampaignOut)
-async def api_complete_campaign(campaign_id: UUID, db: AsyncSession = Depends(get_db)):
+async def api_complete_campaign(
+    campaign_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
+    await get_owned_campaign(db, user, campaign_id)
     try:
         c = await mark_campaign_completed(db, campaign_id)
         return _campaign_out(c)
@@ -235,7 +395,12 @@ async def api_complete_campaign(campaign_id: UUID, db: AsyncSession = Depends(ge
 
 
 @router.get("/campaigns/{campaign_id}/active-session", response_model=SessionOut)
-async def api_campaign_active_session(campaign_id: UUID, db: AsyncSession = Depends(get_db)):
+async def api_campaign_active_session(
+    campaign_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
+    await get_owned_campaign(db, user, campaign_id)
     session = await get_active_session(db, campaign_id)
     if not session:
         raise HTTPException(404, "Nenhuma sessão ativa")
@@ -244,8 +409,12 @@ async def api_campaign_active_session(campaign_id: UUID, db: AsyncSession = Depe
 
 @router.post("/campaigns/{campaign_id}/sessions", response_model=SessionOut)
 async def api_start_session(
-    campaign_id: UUID, body: SessionStart, db: AsyncSession = Depends(get_db)
+    campaign_id: UUID,
+    body: SessionStart,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
 ):
+    await get_owned_campaign(db, user, campaign_id)
     try:
         s = await start_session(db, campaign_id, body.duration_minutes)
         return _session_out(s)
@@ -255,8 +424,12 @@ async def api_start_session(
 
 @router.post("/sessions/{session_id}/turn", response_model=TurnResponse)
 async def api_session_turn(
-    session_id: UUID, body: PlayerAction, db: AsyncSession = Depends(get_db)
+    session_id: UUID,
+    body: PlayerAction,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
 ):
+    await get_owned_session(db, user, session_id)
     try:
         result = await gm.process_turn(db, session_id, body.action)
         from sqlalchemy import select
@@ -270,8 +443,12 @@ async def api_session_turn(
 
 @router.post("/sessions/{session_id}/turn/stream")
 async def api_session_turn_stream(
-    session_id: UUID, body: PlayerAction, db: AsyncSession = Depends(get_db)
+    session_id: UUID,
+    body: PlayerAction,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
 ):
+    await get_owned_session(db, user, session_id)
     try:
         return StreamingResponse(
             gm.stream_turn(db, session_id, body.action),
@@ -326,7 +503,9 @@ async def api_session_roll(
     session_id: UUID,
     body: RollRequest = Body(default_factory=RollRequest),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
 ):
+    await get_owned_session(db, user, session_id)
     roll_override = body.roll
     try:
         result = await gm.execute_roll(db, session_id, roll_override=roll_override)
@@ -341,7 +520,9 @@ async def api_fortune_reroll(
     session_id: UUID,
     body: RollRequest = Body(default_factory=RollRequest),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
 ):
+    await get_owned_session(db, user, session_id)
     try:
         result = await gm.execute_fortune_reroll(db, session_id, roll_override=body.roll)
         session, character = await _session_character(db, session_id)
@@ -351,7 +532,12 @@ async def api_fortune_reroll(
 
 
 @router.post("/sessions/{session_id}/roll/narrate", response_model=TurnResponse)
-async def api_session_roll_narrate(session_id: UUID, db: AsyncSession = Depends(get_db)):
+async def api_session_roll_narrate(
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
+    await get_owned_session(db, user, session_id)
     from sqlalchemy import select
     from app.db.models import GameSession
 
@@ -365,8 +551,11 @@ async def api_session_roll_narrate(session_id: UUID, db: AsyncSession = Depends(
 
 @router.post("/sessions/{session_id}/roll/narrate/stream")
 async def api_session_roll_narrate_stream(
-    session_id: UUID, db: AsyncSession = Depends(get_db)
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
 ):
+    await get_owned_session(db, user, session_id)
     try:
         return StreamingResponse(
             gm.stream_narrate_roll(db, session_id),
@@ -382,7 +571,12 @@ async def api_session_roll_narrate_stream(
 
 
 @router.get("/sessions/{session_id}", response_model=SessionDetailOut)
-async def api_get_session(session_id: UUID, db: AsyncSession = Depends(get_db)):
+async def api_get_session(
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
+    await get_owned_session(db, user, session_id)
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
     from app.db.models import Campaign, GameSession
@@ -398,7 +592,12 @@ async def api_get_session(session_id: UUID, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/sessions/{session_id}/pause", response_model=SessionDetailOut)
-async def api_pause_session(session_id: UUID, db: AsyncSession = Depends(get_db)):
+async def api_pause_session(
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
+    await get_owned_session(db, user, session_id)
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
     from app.db.models import Campaign, GameSession
@@ -418,7 +617,12 @@ async def api_pause_session(session_id: UUID, db: AsyncSession = Depends(get_db)
 
 
 @router.post("/sessions/{session_id}/resume", response_model=SessionDetailOut)
-async def api_resume_session(session_id: UUID, db: AsyncSession = Depends(get_db)):
+async def api_resume_session(
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
+    await get_owned_session(db, user, session_id)
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
     from app.db.models import Campaign, GameSession
@@ -438,7 +642,12 @@ async def api_resume_session(session_id: UUID, db: AsyncSession = Depends(get_db
 
 
 @router.get("/sessions/{session_id}/history", response_model=list[SessionTurnOut])
-async def api_session_history(session_id: UUID, db: AsyncSession = Depends(get_db)):
+async def api_session_history(
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
+    await get_owned_session(db, user, session_id)
     from sqlalchemy import select
     from app.db.models import SessionTurn
 
@@ -464,8 +673,12 @@ async def api_session_history(session_id: UUID, db: AsyncSession = Depends(get_d
 
 @router.post("/sessions/{session_id}/quick-roll", response_model=QuickRollResponse)
 async def api_quick_roll(
-    session_id: UUID, body: QuickRollRequest, db: AsyncSession = Depends(get_db)
+    session_id: UUID,
+    body: QuickRollRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
 ):
+    await get_owned_session(db, user, session_id)
     try:
         return await gm.execute_quick_roll(
             db, session_id, body.roll_type, body.key, body.modifier, roll_override=body.roll
@@ -475,16 +688,23 @@ async def api_quick_roll(
 
 
 @router.get("/campaigns/{campaign_id}/npcs", response_model=CampaignNpcListOut)
-async def api_campaign_npcs(campaign_id: UUID, db: AsyncSession = Depends(get_db)):
-    campaign = await get_campaign(db, campaign_id)
-    if not campaign:
-        raise HTTPException(404, "Campanha não encontrada")
+async def api_campaign_npcs(
+    campaign_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
+    await get_owned_campaign(db, user, campaign_id)
     npcs = await list_campaign_npcs(db, campaign_id)
     return {"npcs": npcs}
 
 
 @router.get("/campaigns/{campaign_id}/diary")
-async def api_diary(campaign_id: UUID, db: AsyncSession = Depends(get_db)):
+async def api_diary(
+    campaign_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
+    await get_owned_campaign(db, user, campaign_id)
     from sqlalchemy import select
     from app.db.models import DiaryEntry
 
@@ -528,7 +748,12 @@ async def api_image_job(job_id: UUID, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/campaigns/{campaign_id}/map")
-async def api_map(campaign_id: UUID, db: AsyncSession = Depends(get_db)):
+async def api_map(
+    campaign_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
+    await get_owned_campaign(db, user, campaign_id)
     from sqlalchemy import select
     from app.db.models import MapRegion
 

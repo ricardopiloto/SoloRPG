@@ -1,20 +1,9 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.config import settings
-
 
 async def apply_schema_patches(conn: AsyncConnection) -> None:
     """Add columns introduced after initial deploy (create_all does not alter tables)."""
-    if settings.is_postgres:
-        await conn.execute(text("ALTER TABLE npcs ADD COLUMN IF NOT EXISTS known_name VARCHAR(120)"))
-        await conn.execute(text("ALTER TABLE npcs ADD COLUMN IF NOT EXISTS met_location VARCHAR(200)"))
-        await conn.execute(
-            text(
-                "ALTER TABLE game_sessions ADD COLUMN IF NOT EXISTS images_enabled BOOLEAN NOT NULL DEFAULT false"
-            )
-        )
-        return
 
     def _patch_sqlite(sync_conn) -> None:
         rows = sync_conn.execute(text("PRAGMA table_info(npcs)")).fetchall()
@@ -29,6 +18,15 @@ async def apply_schema_patches(conn: AsyncConnection) -> None:
         if "images_enabled" not in session_cols:
             sync_conn.execute(
                 text("ALTER TABLE game_sessions ADD COLUMN images_enabled BOOLEAN NOT NULL DEFAULT 0")
+            )
+
+        char_rows = sync_conn.execute(text("PRAGMA table_info(player_characters)")).fetchall()
+        char_cols = {row[1] for row in char_rows}
+        if "user_id" not in char_cols:
+            sync_conn.execute(text("ALTER TABLE player_characters ADD COLUMN user_id CHAR(32)"))
+        if "is_starter" not in char_cols:
+            sync_conn.execute(
+                text("ALTER TABLE player_characters ADD COLUMN is_starter BOOLEAN NOT NULL DEFAULT 0")
             )
 
     await conn.run_sync(_patch_sqlite)

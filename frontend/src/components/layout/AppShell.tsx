@@ -1,7 +1,19 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import { t } from "@/lib/i18n";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const { user, logout } = useAuth();
+  const router = useRouter();
+
+  function handleLogout() {
+    logout();
+    router.push("/login");
+  }
+
   return (
     <div className="min-h-dvh flex flex-col">
       <header className="topnav">
@@ -17,9 +29,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {t("nav.campaigns")}
             </Link>
           </nav>
-          <Link href="/campaigns" className="btn-primary text-sm py-1.5">
-            {t("nav.newCampaign")}
-          </Link>
+          <div className="flex items-center gap-3">
+            {user && (
+              <span className="hidden md:inline text-xs text-wfrp-muted truncate max-w-[160px]">
+                {user.email}
+              </span>
+            )}
+            <button type="button" onClick={handleLogout} className="btn-ghost text-sm py-1.5">
+              {t("auth.logout")}
+            </button>
+            <Link href="/campaigns" className="btn-primary text-sm py-1.5">
+              {t("nav.newCampaign")}
+            </Link>
+          </div>
         </div>
       </header>
       <main className="flex-1">{children}</main>

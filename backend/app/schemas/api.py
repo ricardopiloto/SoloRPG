@@ -1,10 +1,12 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 class CharacterCreate(BaseModel):
+    """Legacy free-form create — rejected unless using creation draft."""
+
     name: str
     background: str | None = None
     attributes: dict[str, int] = Field(default_factory=dict)
@@ -14,6 +16,77 @@ class CharacterCreate(BaseModel):
     skills: list[dict] = Field(default_factory=list)
     talents: list[dict] = Field(default_factory=list)
     trappings: list[dict] = Field(default_factory=list)
+
+
+class CharacterCreationDraft(BaseModel):
+    step: str | None = None
+    species_id: str = "human"
+    species_method: str = "choose"
+    career_id: str | None = None
+    career_method: str = "choose"
+    career_roll_count: int = 0
+    career_roll_options: list[str] = Field(default_factory=list)
+    attributes_method: str = "roll"
+    attribute_rolls: dict[str, int] = Field(default_factory=dict)
+    attribute_allocated: dict[str, int] = Field(default_factory=dict)
+    attribute_advances: dict[str, int] = Field(default_factory=dict)
+    attributes_swapped: bool = False
+    attributes_rerolled: bool = False
+    fate_allotted: int = 2
+    species_skills: dict[str, int] = Field(default_factory=dict)
+    career_skills: dict[str, int] = Field(default_factory=dict)
+    career_talent: str | None = None
+    species_talents: list[str] = Field(default_factory=list)
+    name: str = ""
+    background: str | None = None
+
+
+class CharacterCreationValidateOut(BaseModel):
+    valid: bool
+    errors: list[dict[str, str]]
+    computed: dict | None = None
+
+
+class CharacterCreationSubmit(BaseModel):
+    draft: CharacterCreationDraft
+
+
+class BackgroundGenerateRequest(BaseModel):
+    name: str
+    career: str
+    species: str = "Humano"
+    talents: list[str] = Field(default_factory=list)
+    skills_summary: str | None = None
+    trappings: list[str] = Field(default_factory=list)
+    hints: str | None = None
+
+
+class BackgroundGenerateOut(BaseModel):
+    background: str
+
+
+class CareerSummaryOut(BaseModel):
+    id: str
+    name: str
+    career_group: str
+    career_class: str = Field(alias="class")
+    tier: int = 1
+
+    model_config = {"populate_by_name": True}
+
+
+class CareerDetailOut(CareerSummaryOut):
+    skills: list[str]
+    talents: list[str]
+    trappings: list[dict]
+
+
+class CareerListOut(BaseModel):
+    careers: list[CareerSummaryOut]
+
+
+class CreationOptionsOut(BaseModel):
+    options: dict
 
 
 class PregenCreate(BaseModel):
@@ -211,3 +284,57 @@ class CampaignNpcOut(BaseModel):
 
 class CampaignNpcListOut(BaseModel):
     npcs: list[CampaignNpcOut]
+
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8)
+    password_confirm: str = Field(min_length=8)
+
+    @model_validator(mode="after")
+    def passwords_match(self):
+        if self.password != self.password_confirm:
+            raise ValueError("Senhas não conferem")
+        return self
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=1, max_length=320)
+    password: str
+
+
+class VerifyEmailRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(min_length=8, max_length=8, pattern=r"^\d{8}$")
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+
+class UserOut(BaseModel):
+    id: UUID
+    email: str
+    email_verified: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class RegisterOut(BaseModel):
+    user_id: UUID
+    email: str
+    verification_required: bool = True
+
+
+class AuthTokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+    starter_character: CharacterOut | None = None
+
+
+class AuthConfigOut(BaseModel):
+    auth_mode: str
+    login_username: str
+    registration_enabled: bool

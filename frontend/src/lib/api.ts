@@ -1,5 +1,27 @@
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+import { authHeaders as storedAuthHeaders, clearAuth } from "./auth-storage";
+
+export type AuthUser = {
+  id: string;
+  email: string;
+  email_verified: boolean;
+  created_at?: string;
+};
+
+export type AuthResponse = {
+  access_token: string;
+  token_type: string;
+  user: AuthUser;
+  starter_character?: Character;
+};
+
+export type AuthConfig = {
+  auth_mode: string;
+  login_username: string;
+  registration_enabled: boolean;
+};
+
 export type Character = {
   id: string;
   name: string;
@@ -183,8 +205,15 @@ export type RollHistoryEntry = {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API}/api${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...storedAuthHeaders(),
+      ...init?.headers,
+    },
   });
+  if (res.status === 401) {
+    clearAuth();
+  }
   if (!res.ok) {
     const err = await res.text();
     throw new Error(err || res.statusText);
@@ -192,38 +221,92 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+function authRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  return request<T>(path, init);
+}
+
 export const api = {
-  listPregen: () => request<Array<{ index: number; name: string; background: string; career: string }>>("/characters/pregen"),
+  getAuthConfig: () =>
+    request<AuthConfig>("/auth/config"),
+  register: (email: string, password: string, password_confirm: string) =>
+    request<{ user_id: string; email: string; verification_required: boolean }>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password, password_confirm }),
+    }),
+  verifyEmail: (email: string, code: string) =>
+    request<AuthResponse>("/auth/verify-email", {
+      method: "POST",
+      body: JSON.stringify({ email, code }),
+    }),
+  resendVerification: (email: string) =>
+    request<{ ok: boolean }>("/auth/resend-verification", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+  login: (email: string, password: string) =>
+    request<AuthResponse>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+  me: () => authRequest<AuthUser>("/auth/me"),
+  listPregen: () => authRequest<Array<{ index: number; name: string; background: string; career: string }>>("/characters/pregen"),
   listSkills: () => request<SkillCatalog>("/rules/skills"),
+  getCreationOptions: () => request<{ options: Record<string, unknown> }>("/rules/character-creation"),
+  listCareers: (tier = 1) => request<{ careers: import("@/lib/character-creation").CareerSummary[] }>(`/rules/careers?tier=${tier}`),
+  getCareer: (id: string) => request<import("@/lib/character-creation").CareerDetail>(`/rules/careers/${id}`),
+  validateCreation: (draft: import("@/lib/character-creation").CharacterCreationDraft) =>
+    request<{ valid: boolean; errors: Array<{ step: string; field: string; message: string }>; computed: import("@/lib/character-creation").CreationPreview | null }>(
+      "/characters/validate-creation",
+      { method: "POST", body: JSON.stringify({ draft }) }
+    ),
+  rollCreationAttributes: () => request<{ attributes: Record<string, number> }>("/characters/creation/roll-attributes", { method: "POST", body: "{}" }),
+  rollCreationCareer: (draft: import("@/lib/character-creation").CharacterCreationDraft) =>
+    request<{ roll: number; career: import("@/lib/character-creation").CareerDetail; career_roll_count: number; career_roll_options: string[]; xp_award: number }>(
+      "/characters/creation/roll-career",
+      { method: "POST", body: JSON.stringify({ draft }) }
+    ),
+  rollSpeciesTalent: (draft: import("@/lib/character-creation").CharacterCreationDraft) =>
+    request<{ talent: string }>("/characters/creation/roll-species-talent", { method: "POST", body: JSON.stringify({ draft }) }),
+  generateBackground: (body: {
+    name: string;
+    career: string;
+    species?: string;
+    talents?: string[];
+    skills_summary?: string;
+    trappings?: string[];
+    hints?: string;
+  }) => authRequest<{ background: string }>("/characters/generate-background", { method: "POST", body: JSON.stringify(body) }),
+  createCharacterFromDraft: (draft: import("@/lib/character-creation").CharacterCreationDraft) =>
+    authRequest<Character>("/characters", { method: "POST", body: JSON.stringify({ draft }) }),
   createPregen: (template_index: number, name?: string) =>
-    request<Character>("/characters/pregen", { method: "POST", body: JSON.stringify({ template_index, name }) }),
+    authRequest<Character>("/characters/pregen", { method: "POST", body: JSON.stringify({ template_index, name }) }),
   createCharacter: (data: Partial<Character> & { name: string }) =>
-    request<Character>("/characters", { method: "POST", body: JSON.stringify(data) }),
-  listCharacters: () => request<Character[]>("/characters"),
-  getCharacter: (id: string) => request<Character>(`/characters/${id}`),
-  listCampaigns: () => request<Campaign[]>("/campaigns"),
+    authRequest<Character>("/characters", { method: "POST", body: JSON.stringify(data) }),
+  listCharacters: () => authRequest<Character[]>("/characters"),
+  getCharacter: (id: string) => authRequest<Character>(`/characters/${id}`),
+  listCampaigns: () => authRequest<Campaign[]>("/campaigns"),
   createCampaign: (character_id: string) =>
-    request<Campaign>("/campaigns", { method: "POST", body: JSON.stringify({ character_id }) }),
+    authRequest<Campaign>("/campaigns", { method: "POST", body: JSON.stringify({ character_id }) }),
   completeCampaign: (campaignId: string) =>
-    request<Campaign>(`/campaigns/${campaignId}/complete`, { method: "POST", body: "{}" }),
+    authRequest<Campaign>(`/campaigns/${campaignId}/complete`, { method: "POST", body: "{}" }),
   getActiveSession: (campaignId: string) =>
-    request<GameSession>(`/campaigns/${campaignId}/active-session`),
+    authRequest<GameSession>(`/campaigns/${campaignId}/active-session`),
   getProgressionOptions: (characterId: string) =>
-    request<ProgressionOptions>(`/characters/${characterId}/progression`),
+    authRequest<ProgressionOptions>(`/characters/${characterId}/progression`),
   startSession: (campaignId: string, duration_minutes = 45) =>
-    request<GameSession>(`/campaigns/${campaignId}/sessions`, {
+    authRequest<GameSession>(`/campaigns/${campaignId}/sessions`, {
       method: "POST",
       body: JSON.stringify({ duration_minutes }),
     }),
   sendAction: (sessionId: string, action: string) =>
-    request<TurnResponse>(`/sessions/${sessionId}/turn`, {
+    authRequest<TurnResponse>(`/sessions/${sessionId}/turn`, {
       method: "POST",
       body: JSON.stringify({ action }),
     }),
   async *streamAction(sessionId: string, action: string): AsyncGenerator<StreamEvent> {
     const res = await fetch(`${API}/api/sessions/${sessionId}/turn/stream`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...storedAuthHeaders() },
       body: JSON.stringify({ action }),
     });
     if (!res.ok) {
@@ -252,19 +335,19 @@ export const api = {
     }
   },
   rollTest: (sessionId: string, roll: number) =>
-    request<RollResultResponse>(`/sessions/${sessionId}/roll`, {
+    authRequest<RollResultResponse>(`/sessions/${sessionId}/roll`, {
       method: "POST",
       body: JSON.stringify({ roll }),
     }),
   fortuneReroll: (sessionId: string, roll: number) =>
-    request<RollResultResponse>(`/sessions/${sessionId}/roll/fortune-reroll`, {
+    authRequest<RollResultResponse>(`/sessions/${sessionId}/roll/fortune-reroll`, {
       method: "POST",
       body: JSON.stringify({ roll }),
     }),
   async *streamRollNarrate(sessionId: string): AsyncGenerator<StreamEvent> {
     const res = await fetch(`${API}/api/sessions/${sessionId}/roll/narrate/stream`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...storedAuthHeaders() },
       body: "{}",
     });
     if (!res.ok) {
@@ -293,34 +376,34 @@ export const api = {
     }
   },
   buySkill: (characterId: string, skill_name: string, linked_attribute: string) =>
-    request<Character>(`/characters/${characterId}/progression/skill`, {
+    authRequest<Character>(`/characters/${characterId}/progression/skill`, {
       method: "POST",
       body: JSON.stringify({ skill_name, linked_attribute }),
     }),
   buyTalent: (characterId: string, talent_name: string) =>
-    request<Character>(`/characters/${characterId}/progression/talent`, {
+    authRequest<Character>(`/characters/${characterId}/progression/talent`, {
       method: "POST",
       body: JSON.stringify({ talent_name }),
     }),
-  getSession: (sessionId: string) => request<SessionDetail>(`/sessions/${sessionId}`),
+  getSession: (sessionId: string) => authRequest<SessionDetail>(`/sessions/${sessionId}`),
   pauseSession: (sessionId: string) =>
-    request<SessionDetail>(`/sessions/${sessionId}/pause`, { method: "POST", body: "{}" }),
+    authRequest<SessionDetail>(`/sessions/${sessionId}/pause`, { method: "POST", body: "{}" }),
   resumeSession: (sessionId: string) =>
-    request<SessionDetail>(`/sessions/${sessionId}/resume`, { method: "POST", body: "{}" }),
+    authRequest<SessionDetail>(`/sessions/${sessionId}/resume`, { method: "POST", body: "{}" }),
   getSessionHistory: (sessionId: string) =>
-    request<SessionTurnOut[]>(`/sessions/${sessionId}/history`),
+    authRequest<SessionTurnOut[]>(`/sessions/${sessionId}/history`),
   quickRoll: (sessionId: string, roll_type: string, key: string, modifier = 0, roll?: number) =>
-    request<QuickRollResult>(`/sessions/${sessionId}/quick-roll`, {
+    authRequest<QuickRollResult>(`/sessions/${sessionId}/quick-roll`, {
       method: "POST",
       body: JSON.stringify({ roll_type, key, modifier, ...(roll !== undefined ? { roll } : {}) }),
     }),
   getImageJob: (jobId: string) => request<ImageJob>(`/images/${jobId}`),
   getDiary: (campaignId: string) =>
-    request<Array<{ id: string; content: string; created_at: string }>>(`/campaigns/${campaignId}/diary`),
+    authRequest<Array<{ id: string; content: string; created_at: string }>>(`/campaigns/${campaignId}/diary`),
   listCampaignNpcs: (campaignId: string) =>
-    request<{ npcs: CampaignNpc[] }>(`/campaigns/${campaignId}/npcs`),
+    authRequest<{ npcs: CampaignNpc[] }>(`/campaigns/${campaignId}/npcs`),
   getMap: (campaignId: string) =>
-    request<Array<{ name: string; description?: string; image_url?: string; revealed: boolean }>>(
+    authRequest<Array<{ name: string; description?: string; image_url?: string; revealed: boolean }>>(
       `/campaigns/${campaignId}/map`
     ),
 };

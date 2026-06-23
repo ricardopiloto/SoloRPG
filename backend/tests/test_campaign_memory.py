@@ -2,7 +2,6 @@ import os
 
 import pytest
 
-os.environ["DATABASE_PROFILE"] = "sqlite-dev"
 os.environ["DATABASE_URL"] = ""
 os.environ["LLM_PROVIDER"] = "mock"
 
@@ -89,21 +88,29 @@ async def test_progression_options_lists_skills_and_talents():
 
 @pytest.mark.asyncio
 async def test_api_complete_campaign(client):
+    from tests.conftest import seed_user_character
+
     async with async_session() as db:
-        char = await _seed_character(db)
+        user, char, headers = await seed_user_character(db, "complete-api@example.com")
         campaign = await create_campaign(db, char.id)
-        response = await client.post(f"/api/campaigns/{campaign.id}/complete")
+        response = await client.post(
+            f"/api/campaigns/{campaign.id}/complete", headers=headers
+        )
         assert response.status_code == 200
         assert response.json()["status"] == "concluida"
 
 
 @pytest.mark.asyncio
 async def test_api_active_session(client):
+    from tests.conftest import seed_user_character
+
     async with async_session() as db:
-        char = await _seed_character(db)
+        user, char, headers = await seed_user_character(db, "active-api@example.com")
         campaign = await create_campaign(db, char.id)
         session = await start_session(db, campaign.id)
-        response = await client.get(f"/api/campaigns/{campaign.id}/active-session")
+        response = await client.get(
+            f"/api/campaigns/{campaign.id}/active-session", headers=headers
+        )
         assert response.status_code == 200
         assert response.json()["id"] == str(session.id)
 

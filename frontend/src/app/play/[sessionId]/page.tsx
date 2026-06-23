@@ -9,6 +9,7 @@ import { ResizeHandle, useSidebarWidths } from "@/components/layout/ResizeHandle
 import { ChatLog } from "@/components/session/ChatLog";
 import { SessionPrepareOverlay } from "@/components/session/SessionPrepareOverlay";
 import { TestBlock } from "@/components/session/TestBlock";
+import { RequireAuth } from "@/contexts/AuthContext";
 import { useSessionPlay } from "@/hooks/useSessionPlay";
 import { t } from "@/lib/i18n";
 
@@ -59,9 +60,11 @@ export default function PlayPage() {
 
   if (!session || !character) {
     return (
-      <div className="game-shell items-center justify-center text-wfrp-muted">
-        Carregando sessão…
-      </div>
+      <RequireAuth>
+        <div className="game-shell items-center justify-center text-wfrp-muted">
+          Carregando sessão…
+        </div>
+      </RequireAuth>
     );
   }
 
@@ -72,6 +75,7 @@ export default function PlayPage() {
   ) ?? null;
 
   return (
+    <RequireAuth>
     <div className="game-shell">
       {showPrepare && (
         <SessionPrepareOverlay minutes={session.duration_minutes} onStart={beginSession} />
@@ -211,5 +215,6 @@ export default function PlayPage() {
         </aside>
       </div>
     </div>
+    </RequireAuth>
   );
 }

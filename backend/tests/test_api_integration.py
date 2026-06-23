@@ -5,58 +5,57 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-os.environ.setdefault("DATABASE_PROFILE", "sqlite-dev")
-os.environ.setdefault("DATABASE_URL", "")
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("LLM_PROVIDER", "mock")
+os.environ.setdefault("EMAIL_PROVIDER", "mock")
+os.environ.setdefault("JWT_SECRET", "test-secret-key-for-pytest-min-32-chars")
 
-from app.db.database import engine
-from app.db.models import Base
-
-
-@pytest.fixture(autouse=True)
-async def setup_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+from tests.conftest import auth_headers
 
 
 @pytest.mark.asyncio
 async def test_api_character_campaign_session_lifecycle(client):
-    pregen = await client.post("/api/characters/pregen", json={"template_index": 0})
+    headers = await auth_headers(client, "lifecycle@example.com")
+    pregen = await client.post(
+        "/api/characters/pregen", json={"template_index": 0}, headers=headers
+    )
     assert pregen.status_code == 200
     character = pregen.json()
     assert character["name"]
     assert character["status"] == "vivo"
 
-    chars = await client.get("/api/characters")
+    chars = await client.get("/api/characters", headers=headers)
     assert chars.status_code == 200
     assert any(c["id"] == character["id"] for c in chars.json())
 
     campaign_resp = await client.post(
-        "/api/campaigns", json={"character_id": character["id"]}
+        "/api/campaigns", json={"character_id": character["id"]}, headers=headers
     )
     assert campaign_resp.status_code == 200
     campaign = campaign_resp.json()
     assert campaign["status"] == "ativa"
 
-    dup = await client.post("/api/campaigns", json={"character_id": character["id"]})
+    dup = await client.post(
+        "/api/campaigns", json={"character_id": character["id"]}, headers=headers
+    )
     assert dup.status_code == 400
 
     session_resp = await client.post(
         f"/api/campaigns/{campaign['id']}/sessions",
         json={"duration_minutes": 45},
+        headers=headers,
     )
     assert session_resp.status_code == 200
     session = session_resp.json()
     assert session["is_active"] is True
 
-    active = await client.get(f"/api/campaigns/{campaign['id']}/active-session")
+    active = await client.get(
+        f"/api/campaigns/{campaign['id']}/active-session", headers=headers
+    )
     assert active.status_code == 200
     assert active.json()["id"] == session["id"]
 
-    detail = await client.get(f"/api/sessions/{session['id']}")
+    detail = await client.get(f"/api/sessions/{session['id']}", headers=headers)
     assert detail.status_code == 200
     assert detail.json()["campaign_id"] == campaign["id"]
 
@@ -68,26 +67,38 @@ async def test_api_character_campaign_session_lifecycle(client):
         turn = await client.post(
             f"/api/sessions/{session['id']}/turn",
             json={"action": "Avanço cautelosamente"},
+            headers=headers,
         )
     assert turn.status_code == 200
     body = turn.json()
     assert body["turn_phase"] == "awaiting_roll"
     assert body["pending_test"] is not None
 
-    roll = await client.post(f"/api/sessions/{session['id']}/roll", json={})
+    roll = await client.post(
+        f"/api/sessions/{session['id']}/roll", json={}, headers=headers
+    )
     assert roll.status_code == 200
     assert roll.json()["roll_results"]
     assert roll.json()["turn_phase"] == "awaiting_narrate"
 
-    with patch("app.api.routes.gm.llm.complete", new_callable=AsyncMock, return_value="Você consegue passar."):
-        narrate = await client.post(f"/api/sessions/{session['id']}/roll/narrate", json={})
+    with patch(
+        "app.api.routes.gm.llm.complete",
+        new_callable=AsyncMock,
+        return_value="Você consegue passar.",
+    ):
+        narrate = await client.post(
+            f"/api/sessions/{session['id']}/roll/narrate", json={}, headers=headers
+        )
     assert narrate.status_code == 200
     assert narrate.json()["narrative"]
 
 
 @pytest.mark.asyncio
 async def test_api_progression_after_xp(client):
-    pregen = await client.post("/api/characters/pregen", json={"template_index": 1})
+    headers = await auth_headers(client, "progression@example.com")
+    pregen = await client.post(
+        "/api/characters/pregen", json={"template_index": 1}, headers=headers
+    )
     character = pregen.json()
 
     from uuid import UUID
@@ -100,7 +111,9 @@ async def test_api_progression_after_xp(client):
         char.xp_total = 20
         await db.commit()
 
-    prog = await client.get(f"/api/characters/{character['id']}/progression")
+    prog = await client.get(
+        f"/api/characters/{character['id']}/progression", headers=headers
+    )
     assert prog.status_code == 200
     data = prog.json()
     assert data["xp_available"] == 20
@@ -109,6 +122,7 @@ async def test_api_progression_after_xp(client):
     buy = await client.post(
         f"/api/characters/{character['id']}/progression/skill",
         json={"skill_name": "Atletismo", "linked_attribute": "Ag"},
+        headers=headers,
     )
     assert buy.status_code == 200
     assert buy.json()["xp_spent"] == 5
@@ -117,63 +131,77 @@ async def test_api_progression_after_xp(client):
 @pytest.mark.asyncio
 async def test_api_session_pause_resume(client):
     """Sessão pode ser pausada, retomada, e não cria duplicata enquanto pausada."""
-    pregen = await client.post("/api/characters/pregen", json={"template_index": 0})
+    headers = await auth_headers(client, "pause@example.com")
+    pregen = await client.post(
+        "/api/characters/pregen", json={"template_index": 0}, headers=headers
+    )
     character = pregen.json()
-    campaign_resp = await client.post("/api/campaigns", json={"character_id": character["id"]})
+    campaign_resp = await client.post(
+        "/api/campaigns", json={"character_id": character["id"]}, headers=headers
+    )
     campaign = campaign_resp.json()
 
     session_resp = await client.post(
         f"/api/campaigns/{campaign['id']}/sessions",
         json={"duration_minutes": 45},
+        headers=headers,
     )
     assert session_resp.status_code == 200
     session = session_resp.json()
     session_id = session["id"]
     assert session["paused_at"] is None
 
-    # Pause
-    pause_resp = await client.post(f"/api/sessions/{session_id}/pause")
+    pause_resp = await client.post(
+        f"/api/sessions/{session_id}/pause", headers=headers
+    )
     assert pause_resp.status_code == 200
     paused = pause_resp.json()
     assert paused["paused_at"] is not None
-    # Timer should be frozen (same time_remaining as fresh session, roughly)
     assert paused["time_remaining_minutes"] >= 44
 
-    # Trying to pause again should fail
-    dup_pause = await client.post(f"/api/sessions/{session_id}/pause")
+    dup_pause = await client.post(
+        f"/api/sessions/{session_id}/pause", headers=headers
+    )
     assert dup_pause.status_code == 400
 
-    # Starting a new session for same campaign should return the paused one
     start_again = await client.post(
         f"/api/campaigns/{campaign['id']}/sessions",
         json={"duration_minutes": 45},
+        headers=headers,
     )
     assert start_again.status_code == 200
     assert start_again.json()["id"] == session_id
 
-    # Resume
-    resume_resp = await client.post(f"/api/sessions/{session_id}/resume")
+    resume_resp = await client.post(
+        f"/api/sessions/{session_id}/resume", headers=headers
+    )
     assert resume_resp.status_code == 200
     resumed = resume_resp.json()
     assert resumed["paused_at"] is None
-    # total_paused_seconds visible via detail; time remaining should still be ~45
     assert resumed["time_remaining_minutes"] >= 44
 
-    # Trying to resume again should fail
-    dup_resume = await client.post(f"/api/sessions/{session_id}/resume")
+    dup_resume = await client.post(
+        f"/api/sessions/{session_id}/resume", headers=headers
+    )
     assert dup_resume.status_code == 400
 
 
 @pytest.mark.asyncio
 async def test_api_session_history(client):
     """GET /sessions/{id}/history retorna turns persistidos em ordem."""
-    pregen = await client.post("/api/characters/pregen", json={"template_index": 1})
+    headers = await auth_headers(client, "history@example.com")
+    pregen = await client.post(
+        "/api/characters/pregen", json={"template_index": 1}, headers=headers
+    )
     character = pregen.json()
-    campaign_resp = await client.post("/api/campaigns", json={"character_id": character["id"]})
+    campaign_resp = await client.post(
+        "/api/campaigns", json={"character_id": character["id"]}, headers=headers
+    )
     campaign = campaign_resp.json()
     session_resp = await client.post(
         f"/api/campaigns/{campaign['id']}/sessions",
         json={"duration_minutes": 45},
+        headers=headers,
     )
     session_id = session_resp.json()["id"]
 
@@ -185,12 +213,14 @@ async def test_api_session_history(client):
         await client.post(
             f"/api/sessions/{session_id}/turn",
             json={"action": "Olho ao redor"},
+            headers=headers,
         )
 
-    history_resp = await client.get(f"/api/sessions/{session_id}/history")
+    history_resp = await client.get(
+        f"/api/sessions/{session_id}/history", headers=headers
+    )
     assert history_resp.status_code == 200
     turns = history_resp.json()
-    # Should have at least the player turn and gm turn
     assert len(turns) >= 2
     roles = [t["role"] for t in turns]
     assert "player" in roles
@@ -199,17 +229,82 @@ async def test_api_session_history(client):
 
 @pytest.mark.asyncio
 async def test_api_campaign_complete(client):
-    pregen = await client.post("/api/characters/pregen", json={"template_index": 0})
+    headers = await auth_headers(client, "complete@example.com")
+    pregen = await client.post(
+        "/api/characters/pregen", json={"template_index": 0}, headers=headers
+    )
     character = pregen.json()
     campaign_resp = await client.post(
-        "/api/campaigns", json={"character_id": character["id"]}
+        "/api/campaigns", json={"character_id": character["id"]}, headers=headers
     )
     campaign = campaign_resp.json()
 
-    complete = await client.post(f"/api/campaigns/{campaign['id']}/complete")
+    complete = await client.post(
+        f"/api/campaigns/{campaign['id']}/complete", headers=headers
+    )
     assert complete.status_code == 200
     assert complete.json()["status"] == "concluida"
 
-    list_resp = await client.get("/api/campaigns")
+    list_resp = await client.get("/api/campaigns", headers=headers)
     statuses = [c["status"] for c in list_resp.json() if c["id"] == campaign["id"]]
     assert statuses == ["concluida"]
+
+
+@pytest.mark.asyncio
+async def test_api_list_careers_returns_class_field(client):
+    resp = await client.get("/api/rules/careers?tier=1")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["careers"]) >= 1
+    assert data["careers"][0]["class"] in ("martial", "academic", "ranger", "rogue")
+
+
+@pytest.mark.asyncio
+async def test_api_wizard_character_creation(client, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "enable_custom_chargen", True)
+    from app.rules.character_creation import roll_all_characteristics
+
+    headers = await auth_headers(client, "wizard@example.com")
+
+    career_skills = {
+        "Luta": 8,
+        "Atletismo": 6,
+        "Percepção": 5,
+        "Vontade": 5,
+        "Intimidação": 4,
+        "Orientação": 4,
+        "Atirar (Armas de Fogo)": 4,
+        "Charme": 4,
+    }
+    draft = {
+        "species_id": "human",
+        "species_method": "choose",
+        "career_id": "soldado",
+        "career_method": "choose",
+        "attributes_method": "roll",
+        "attribute_rolls": roll_all_characteristics(),
+        "fate_allotted": 2,
+        "species_skills": {"Charme": 3},
+        "career_skills": career_skills,
+        "career_talent": "Resolução",
+        "species_talents": ["Sortudo"],
+        "name": "API Wizard Hero",
+        "background": "Teste integração",
+    }
+    resp = await client.post(
+        "/api/characters", json={"draft": draft}, headers=headers
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["name"] == "API Wizard Hero"
+    assert data["wounds_max"] >= 1
+    assert data["careers"][0]["name"] == "Soldado"
+
+    legacy = await client.post(
+        "/api/characters",
+        json={"name": "Legacy", "attributes": {}, "wounds_max": 99},
+        headers=headers,
+    )
+    assert legacy.status_code == 422

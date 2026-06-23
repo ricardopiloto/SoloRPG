@@ -1,0 +1,286 @@
+{
+  "careers": [
+    {
+      "id": "agente",
+      "name": "Agente",
+      "career_group": "Agente",
+      "class": "rogue",
+      "tier": 1,
+      "skills": ["Charme", "Percepção", "Furtividade", "Intimidação", "Luta", "Atletismo", "Conhecimento (Reikland)", "Vontade"],
+      "talents": ["Discreto", "Olhos de Águia"],
+      "trappings": [
+        {"name": "Roupas comuns", "encumbrance": 1, "description": "Vestes discretas"},
+        {"name": "Adaga", "encumbrance": 1, "description": "Lâmina oculta"}
+      ]
+    },
+    {
+      "id": "aprendiz",
+      "name": "Aprendiz",
+      "career_group": "Aprendiz",
+      "class": "academic",
+      "tier": 1,
+      "skills": ["Conhecimento (Reikland)", "Vontade", "Percepção", "Charme", "Luta", "Atletismo", "Intimidação", "Orientação"],
+      "talents": ["Leitura Apressada", "Resolução"],
+      "trappings": [
+        {"name": "Grimório", "encumbrance": 1, "description": "Páginas amareladas"},
+        {"name": "Roupas de aprendiz", "encumbrance": 1, "description": "Túnica da academia"}
+      ]
+    },
+    {
+      "id": "artesao",
+      "name": "Artesão",
+      "career_group": "Artesão",
+      "class": "academic",
+      "tier": 1,
+      "skills": ["Conhecimento (Reikland)", "Percepção", "Charme", "Luta", "Atletismo", "Intimidação", "Orientação", "Vontade"],
+      "talents": ["Artífice", "Robusto"],
+      "trappings": [
+        {"name": "Ferramentas de ofício", "encumbrance": 2, "description": "Kit do mestre"},
+        {"name": "Avental de couro", "encumbrance": 1, "description": ""}
+      ]
+    },
+    {
+      "id": "atirador",
+      "name": "Atirador de Elite",
+      "career_group": "Atirador de Elite",
+      "class": "martial",
+      "tier": 1,
+      "skills": ["Atirar (Arco)", "Atirar (Bestas)", "Percepção", "Atletismo", "Luta", "Furtividade", "Orientação", "Vontade"],
+      "talents": ["Olhos de Águia", "Resolução"],
+      "trappings": [
+        {"name": "Arco longo", "encumbrance": 2, "description": "Madeira de ébano"},
+        {"name": "Aljava", "encumbrance": 1, "description": "20 flechas"}
+      ]
+    },
+    {
+      "id": "batedor",
+      "name": "Batedor",
+      "career_group": "Batedor",
+      "class": "ranger",
+      "tier": 1,
+      "skills": ["Orientação", "Percepção", "Furtividade", "Atletismo", "Atirar (Arco)", "Luta", "Escalar", "Navegação"],
+      "talents": ["Corredor", "Olhos de Águia"],
+      "trappings": [
+        {"name": "Arco curto", "encumbrance": 2, "description": ""},
+        {"name": "Capa camuflada", "encumbrance": 1, "description": ""}
+      ]
+    },
+    {
+      "id": "guarda",
+      "name": "Guarda",
+      "career_group": "Guarda",
+      "class": "martial",
+      "tier": 1,
+      "skills": ["Luta", "Percepção", "Intimidação", "Atletismo", "Vontade", "Charme", "Orientação", "Furtividade"],
+      "talents": ["Resolução", "Robusto"],
+      "trappings": [
+        {"name": "Alabarda", "encumbrance": 2, "description": ""},
+        {"name": "Armadura leve", "encumbrance": 2, "description": ""}
+      ]
+    },
+    {
+      "id": "mercenario",
+      "name": "Mercenário",
+      "career_group": "Mercenário",
+      "class": "martial",
+      "tier": 1,
+      "skills": ["Luta", "Atletismo", "Intimidação", "Percepção", "Vontade", "Orientação", "Atirar (Armas de Fogo)", "Charme"],
+      "talents": ["Resolução", "Forte"],
+      "trappings": [
+        {"name": "Espada longa", "encumbrance": 2, "description": ""},
+        {"name": "Escudo", "encumbrance": 2, "description": ""}
+      ]
+    },
+    {
+      "id": "mensageiro",
+      "name": "Mensageiro",
+      "career_group": "Mensageiro",
+      "class": "ranger",
+      "tier": 1,
+      "skills": ["Atletismo", "Orientação", "Percepção", "Charme", "Luta", "Furtividade", "Navegação", "Vontade"],
+      "talents": ["Corredor", "Discreto"],
+      "trappings": [
+        {"name": "Roupas de viagem", "encumbrance": 1, "description": ""},
+        {"name": "Bota robusta", "encumbrance": 1, "description": ""}
+      ]
+    },
+    {
+      "id": "nobre",
+      "name": "Nobre",
+      "career_group": "Nobre",
+      "class": "academic",
+      "tier": 1,
+      "skills": ["Charme", "Liderança", "Luta", "Percepção", "Conhecimento (Reikland)", "Atletismo", "Intimidação", "Vontade"],
+      "talents": ["Eloquência", "Resolução"],
+      "trappings": [
+        {"name": "Roupas finas", "encumbrance": 1, "description": "Seda e brocado"},
+        {"name": "Espada de duelo", "encumbrance": 1, "description": ""}
+      ]
+    },
+    {
+      "id": "sacerdote",
+      "name": "Sacerdote",
+      "career_group": "Sacerdote",
+      "class": "academic",
+      "tier": 1,
+      "skills": ["Charme", "Liderança", "Vontade", "Percepção", "Conhecimento (Reikland)", "Luta", "Intimidação", "Atletismo"],
+      "talents": ["Resolução", "Fervor"],
+      "trappings": [
+        {"name": "Símbolo sagrado", "encumbrance": 0, "description": ""},
+        {"name": "Vestes litúrgicas", "encumbrance": 1, "description": ""}
+      ]
+    },
+    {
+      "id": "salteador",
+      "name": "Salteador",
+      "career_group": "Salteador",
+      "class": "rogue",
+      "tier": 1,
+      "skills": ["Luta", "Atletismo", "Furtividade", "Percepção", "Intimidação", "Orientação", "Atirar (Arco)", "Vontade"],
+      "talents": ["Corredor", "Discreto"],
+      "trappings": [
+        {"name": "Machado", "encumbrance": 2, "description": ""},
+        {"name": "Máscara", "encumbrance": 0, "description": ""}
+      ]
+    },
+    {
+      "id": "servo",
+      "name": "Servo",
+      "career_group": "Servo",
+      "class": "rogue",
+      "tier": 1,
+      "skills": ["Charme", "Percepção", "Atletismo", "Luta", "Furtividade", "Conhecimento (Reikland)", "Vontade", "Intimidação"],
+      "talents": ["Discreto", "Sortudo"],
+      "trappings": [
+        {"name": "Roupas de serviçal", "encumbrance": 1, "description": ""},
+        {"name": "Bandeja", "encumbrance": 1, "description": ""}
+      ]
+    },
+    {
+      "id": "estudante",
+      "name": "Estudante",
+      "career_group": "Estudante",
+      "class": "academic",
+      "tier": 1,
+      "skills": ["Conhecimento (Reikland)", "Percepção", "Charme", "Vontade", "Luta", "Atletismo", "Orientação", "Intimidação"],
+      "talents": ["Leitura Apressada", "Resolução"],
+      "trappings": [
+        {"name": "Livros", "encumbrance": 2, "description": "Tomos empoeirados"},
+        {"name": "Tinta e pena", "encumbrance": 0, "description": ""}
+      ]
+    },
+    {
+      "id": "explorador",
+      "name": "Explorador",
+      "career_group": "Explorador",
+      "class": "ranger",
+      "tier": 1,
+      "skills": ["Orientação", "Percepção", "Atletismo", "Furtividade", "Atirar (Arco)", "Luta", "Navegação", "Escalar"],
+      "talents": ["Olhos de Águia", "Corredor"],
+      "trappings": [
+        {"name": "Arco curto", "encumbrance": 2, "description": ""},
+        {"name": "Corda", "encumbrance": 1, "description": "30 jardas"}
+      ]
+    },
+    {
+      "id": "ferreiro",
+      "name": "Ferreiro",
+      "career_group": "Ferreiro",
+      "class": "academic",
+      "tier": 1,
+      "skills": ["Conhecimento (Reikland)", "Percepção", "Luta", "Atletismo", "Intimidação", "Charme", "Vontade", "Orientação"],
+      "talents": ["Artífice", "Robusto"],
+      "trappings": [
+        {"name": "Martelo de forja", "encumbrance": 2, "description": ""},
+        {"name": "Avental de couro", "encumbrance": 1, "description": ""}
+      ]
+    },
+    {
+      "id": "ladrao",
+      "name": "Ladrão",
+      "career_group": "Ladrão",
+      "class": "rogue",
+      "tier": 1,
+      "skills": ["Furtividade", "Arrombamento", "Atletismo", "Percepção", "Luta", "Charme", "Intimidação", "Esquivar"],
+      "talents": ["Discreto", "Corredor"],
+      "trappings": [
+        {"name": "Gazua", "encumbrance": 0, "description": ""},
+        {"name": "Adaga", "encumbrance": 1, "description": ""}
+      ]
+    },
+    {
+      "id": "marinheiro",
+      "name": "Marinheiro",
+      "career_group": "Marinheiro",
+      "class": "ranger",
+      "tier": 1,
+      "skills": ["Navegação", "Atletismo", "Luta", "Percepção", "Natação", "Orientação", "Vontade", "Intimidação"],
+      "talents": ["Robusto", "Resolução"],
+      "trappings": [
+        {"name": "Corda", "encumbrance": 1, "description": ""},
+        {"name": "Faca de convés", "encumbrance": 1, "description": ""}
+      ]
+    },
+    {
+      "id": "medico",
+      "name": "Médico",
+      "career_group": "Médico",
+      "class": "academic",
+      "tier": 1,
+      "skills": ["Conhecimento (Reikland)", "Percepção", "Charme", "Vontade", "Luta", "Atletismo", "Intimidação", "Orientação"],
+      "talents": ["Resolução", "Leitura Apressada"],
+      "trappings": [
+        {"name": "Kit de cirurgião", "encumbrance": 2, "description": ""},
+        {"name": "Roupas comuns", "encumbrance": 1, "description": ""}
+      ]
+    },
+    {
+      "id": "pistoleiro",
+      "name": "Pistoleiro",
+      "career_group": "Pistoleiro",
+      "class": "martial",
+      "tier": 1,
+      "skills": ["Atirar (Pistolas)", "Atletismo", "Percepção", "Luta", "Intimidação", "Charme", "Vontade", "Furtividade"],
+      "talents": ["Olhos de Águia", "Rápido Reflexo"],
+      "trappings": [
+        {"name": "Pistola", "encumbrance": 1, "description": ""},
+        {"name": "Pólvora e balas", "encumbrance": 1, "description": ""}
+      ]
+    },
+    {
+      "id": "soldado",
+      "name": "Soldado",
+      "career_group": "Soldado",
+      "class": "martial",
+      "tier": 1,
+      "skills": ["Luta", "Atletismo", "Percepção", "Vontade", "Intimidação", "Orientação", "Atirar (Armas de Fogo)", "Charme"],
+      "talents": ["Resolução", "Robusto"],
+      "trappings": [
+        {"name": "Espada longa", "encumbrance": 2, "description": "Aço imperial"},
+        {"name": "Uniforme", "encumbrance": 1, "description": ""}
+      ]
+    }
+  ],
+  "human_roll_table": [
+    {"min": 1, "max": 5, "career_id": "agente"},
+    {"min": 6, "max": 10, "career_id": "aprendiz"},
+    {"min": 11, "max": 15, "career_id": "artesao"},
+    {"min": 16, "max": 20, "career_id": "atirador"},
+    {"min": 21, "max": 25, "career_id": "batedor"},
+    {"min": 26, "max": 30, "career_id": "guarda"},
+    {"min": 31, "max": 35, "career_id": "mercenario"},
+    {"min": 36, "max": 40, "career_id": "mensageiro"},
+    {"min": 41, "max": 45, "career_id": "nobre"},
+    {"min": 46, "max": 50, "career_id": "sacerdote"},
+    {"min": 51, "max": 55, "career_id": "salteador"},
+    {"min": 56, "max": 60, "career_id": "servo"},
+    {"min": 61, "max": 65, "career_id": "estudante"},
+    {"min": 66, "max": 70, "career_id": "explorador"},
+    {"min": 71, "max": 75, "career_id": "ferreiro"},
+    {"min": 76, "max": 80, "career_id": "ladrao"},
+    {"min": 81, "max": 85, "career_id": "marinheiro"},
+    {"min": 86, "max": 90, "career_id": "medico"},
+    {"min": 91, "max": 95, "career_id": "pistoleiro"},
+    {"min": 96, "max": 100, "career_id": "soldado"}
+  ]
+}

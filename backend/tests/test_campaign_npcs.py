@@ -2,7 +2,6 @@ import os
 
 import pytest
 
-os.environ["DATABASE_PROFILE"] = "sqlite-dev"
 os.environ["DATABASE_URL"] = ""
 os.environ["LLM_PROVIDER"] = "mock"
 
@@ -90,11 +89,10 @@ async def test_persist_session_summary_npc_local_and_known_name():
 
 @pytest.mark.asyncio
 async def test_api_list_campaign_npcs(client):
+    from tests.conftest import seed_user_character
+
     async with async_session() as db:
-        char = PlayerCharacter(name="Hero", status=CharacterStatus.ALIVE)
-        db.add(char)
-        await db.commit()
-        await db.refresh(char)
+        user, char, headers = await seed_user_character(db, "npc-api@example.com")
         campaign = await create_campaign(db, char.id)
         await apply_nova_campanha(
             db,
@@ -105,7 +103,7 @@ async def test_api_list_campaign_npcs(client):
             },
         )
 
-        response = await client.get(f"/api/campaigns/{campaign.id}/npcs")
+        response = await client.get(f"/api/campaigns/{campaign.id}/npcs", headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data["npcs"]) == 1

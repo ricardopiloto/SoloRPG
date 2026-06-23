@@ -3,7 +3,7 @@ import math
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -103,7 +103,7 @@ class SemanticSearchAdapter(ABC):
 
 
 class PythonSearchAdapter(SemanticSearchAdapter):
-    """Cosine similarity in Python — used for sqlite-dev."""
+    """Cosine similarity in Python over JSON embeddings stored in SQLite."""
 
     async def rank_events(
         self, db: AsyncSession, campaign_id, query: str, limit: int
@@ -128,46 +128,7 @@ class PythonSearchAdapter(SemanticSearchAdapter):
         return [ev for _, ev in scored[:limit]]
 
 
-class PgVectorSearchAdapter(SemanticSearchAdapter):
-    """pgvector distance query — used for postgres/supabase."""
-
-    async def rank_events(
-        self, db: AsyncSession, campaign_id, query: str, limit: int
-    ) -> list[NarrativeEvent]:
-        q_emb = simple_embedding(query)
-        vec_literal = "[" + ",".join(str(v) for v in q_emb) + "]"
-        result = await db.execute(
-            text(
-                """
-                SELECT id FROM narrative_events
-                WHERE campaign_id = :campaign_id AND embedding IS NOT NULL
-                ORDER BY embedding <=> :query_vec
-                LIMIT :lim
-                """
-            ),
-            {"campaign_id": campaign_id, "query_vec": vec_literal, "lim": limit},
-        )
-        ids = [row[0] for row in result.fetchall()]
-        if not ids:
-            return (
-                await db.scalars(
-                    select(NarrativeEvent)
-                    .where(NarrativeEvent.campaign_id == campaign_id)
-                    .order_by(NarrativeEvent.created_at.desc())
-                    .limit(limit)
-                )
-            ).all()
-        events = (
-            await db.scalars(select(NarrativeEvent).where(NarrativeEvent.id.in_(ids)))
-        ).all()
-        order = {eid: i for i, eid in enumerate(ids)}
-        events.sort(key=lambda e: order.get(e.id, 999))
-        return events
-
-
 def get_semantic_search() -> SemanticSearchAdapter:
-    if settings.is_postgres:
-        return PgVectorSearchAdapter()
     return PythonSearchAdapter()
 
 

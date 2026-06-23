@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
+import { RequireAuth } from "@/contexts/AuthContext";
 import { api, Campaign, Character } from "@/lib/api";
 import { t } from "@/lib/i18n";
 
@@ -26,7 +27,8 @@ export default function HomePage() {
   const hero = active?.character_name || characters[0]?.name;
 
   return (
-    <AppShell>
+    <RequireAuth>
+      <AppShell>
       <div className="container-wfrp py-12">
         {loadError && (
           <p className="text-wfrp-danger text-sm mb-4">
@@ -70,7 +72,7 @@ export default function HomePage() {
                   {t("nav.campaigns")}
                 </Link>
                 <Link href="/character" className="btn-ghost">
-                  {t("nav.characters")}
+                  {t("home.anotherCharacter")}
                 </Link>
               </div>
             </section>
@@ -122,5 +124,6 @@ export default function HomePage() {
         )}
       </div>
     </AppShell>
+    </RequireAuth>
   );
 }

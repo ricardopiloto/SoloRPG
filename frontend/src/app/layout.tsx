@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Cinzel, Crimson_Text, Source_Sans_3 } from "next/font/google";
+import { Providers } from "./providers";
 import "./globals.css";
 
 const cinzel = Cinzel({
@@ -29,7 +30,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" className={`${cinzel.variable} ${crimson.variable} ${sourceSans.variable}`}>
-      <body className="font-ui min-h-dvh">{children}</body>
+      <body className="font-ui min-h-dvh">
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

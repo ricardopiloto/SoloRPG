@@ -8,29 +8,30 @@ WFRP Solo is a web application for solo tabletop RPG play where an LLM acts as a
 
 - **Frontend:** Next.js 14 (App Router), TailwindCSS, shadcn/ui, next-intl
 - **Backend:** Python + FastAPI
-- **Database:** PostgreSQL + pgvector (Supabase for MVP)
+- **Database:** SQLite (`aiosqlite`) — single file `wfrp_solo.db`
+- **Semantic memory:** JSON embeddings + Python cosine search (`PythonSearchAdapter`)
 - **LLM:** DeepSeek (`deepseek-chat`) default; adapter suporta mock / Claude
 - **Image generation:** Cloudflare Workers AI (`flux-1-schnell`, async background queue)
-- **Deploy:** Vercel (frontend), Railway/Fly.io (backend), Supabase (database)
+- **Deploy:** Vercel (frontend), Railway/Fly.io or VPS Debian (backend + SQLite file)
 
 ## Project Conventions
 
 ### Code Style
-- TypeScript on frontend; Python or TypeScript on backend per stack choice
+- TypeScript on frontend; Python on backend
 - PT-BR for all user-facing strings; externalized via i18n from day one
 - Server-side game mechanics; never delegate dice or wounds to LLM
 
 ### Architecture Patterns
 - **Separation of concerns:** Rules engine (deterministic code) / Narrative (LLM) / Memory (database)
 - **Signal protocol:** LLM emits tagged JSON signals (`[TESTE]`, `[IMAGEM]`, etc.); backend parses and executes
-- **Four-layer memory:** Relational facts → pgvector semantic search → compressed LLM summaries → active session turn history
+- **Four-layer memory:** Relational facts → Python semantic search → compressed LLM summaries → active session turn history
 - **Two session modes:** EXPLORACAO (time-based) and COMBATE (turn-based)
 
 ### Testing Strategy
 - Unit tests for WFRP rules engine (dice, combat, wounds, XP, progression)
 - Integration tests for signal parsing and LLM loop (mocked LLM)
 - API tests for character, campaign, and session lifecycle
-- E2E test for main loop: create character → session → XP → progression
+- E2E test for main loop: auth → pregen → session → XP → progression
 
 ### Git Workflow
 - Feature branches; conventional commit messages
@@ -52,25 +53,22 @@ WFRP Solo is a web application for solo tabletop RPG play where an LLM acts as a
 - Native PT-BR; i18n-ready architecture
 - No multiplayer, no videogame controls, no monetization, no native mobile app
 - Fate Points do not reset between campaigns in MVP
+- SQLite: single uvicorn worker recommended in production
 
 ## External Dependencies
 
 - LLM API (Anthropic Claude / DeepSeek) — model-agnostic adapter required
 - Cloudflare Workers AI API — async image generation (FLUX.1 Schnell)
-- Supabase — PostgreSQL + pgvector hosting
-- Vercel — frontend hosting
+- SMTP — email verification in production
+- Vercel — frontend hosting (optional)
 
 ## Reference Documents
 
 - `Docs/README.md` — documentation index
+- `Docs/architecture.md` — architecture, flows, frontend/backend split
 - `Docs/product-brief.md` — product requirements and MVP scope
 - `Docs/ux-spec.md` — UI/UX design spec (grimório palette, 9 screens)
-- `Docs/prototype-gap-analysis.md` — Open Design prototype vs current frontend
-- `Docs/session-flow.md` — Mermaid flows (session, combat, dice)
-- `Docs/database-schema.md` — PostgreSQL + pgvector schema
-- `Docs/development-order.md` — phased development order and OpenSpec sequencing
-- `Docs/frontend-backend-split.md` — frontend vs backend responsibilities
+- `Docs/database-schema.md` — SQLite schema + JSON embeddings
+- `Docs/debian-server-install.md` — Debian/Ubuntu server deployment guide
 - `Docs/gm-system-prompt.md` — GM persona and signal protocol
-- `Docs/technical-research.md` — architecture and stack decisions
-
-**UI prototype (Open Design):** `open-design/.od/projects/a37408fc-73d7-4e3e-8d6f-2367528ff373/`
+- `Docs/mvp-validation-checklist.md` — manual QA checklist

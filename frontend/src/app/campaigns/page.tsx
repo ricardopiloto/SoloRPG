@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
+import { RequireAuth } from "@/contexts/AuthContext";
 import { api, Campaign, Character } from "@/lib/api";
 import { t } from "@/lib/i18n";
 
@@ -68,6 +69,7 @@ export default function CampaignsPage() {
   );
 
   return (
+    <RequireAuth>
     <AppShell>
       <div className="container-wfrp py-12 max-w-2xl">
         <h1 className="font-display text-3xl mb-8">{t("nav.campaigns")}</h1>
@@ -181,5 +183,6 @@ export default function CampaignsPage() {
         )}
       </div>
     </AppShell>
+    </RequireAuth>
   );
 }

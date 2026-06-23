@@ -40,23 +40,11 @@ fi
 
 echo
 echo "Banco de dados"
-PROFILE="${DATABASE_PROFILE:-sqlite-dev}"
-if [[ -f "$ROOT/backend/.env" ]]; then
-  # shellcheck disable=SC1091
-  source <(grep -E '^DATABASE_PROFILE=' "$ROOT/backend/.env" | sed 's/^/export /') 2>/dev/null || true
-  PROFILE="${DATABASE_PROFILE:-sqlite-dev}"
-fi
-ok "perfil configurado: $PROFILE"
-
-if [[ "$PROFILE" == "sqlite-dev" ]]; then
-  ok "sqlite-dev — sem dependência externa"
+ok "SQLite — arquivo local (sem dependência externa)"
+if [[ -f "$ROOT/backend/wfrp_solo.db" ]]; then
+  ok "backend/wfrp_solo.db existe"
 else
-  if ss -tlnp 2>/dev/null | grep -q ':5432'; then
-    ok "porta 5432 em uso (PostgreSQL provável)"
-  else
-    bad "porta 5432 livre — postgres/supabase indisponível?"
-    echo "    Sugestão: DATABASE_PROFILE=sqlite-dev no backend/.env"
-  fi
+  echo "  · wfrp_solo.db será criado na primeira subida do backend"
 fi
 
 echo

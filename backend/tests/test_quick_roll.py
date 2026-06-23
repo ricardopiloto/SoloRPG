@@ -3,7 +3,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-os.environ["DATABASE_PROFILE"] = "sqlite-dev"
 os.environ["DATABASE_URL"] = ""
 os.environ["LLM_PROVIDER"] = "mock"
 
