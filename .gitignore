@@ -32,6 +32,16 @@ Thumbs.db
 # Generated images (Cloudflare Workers AI)
 backend/generated_images/
 
+# Docker — SQLite persistido no host
+data/*.db
+data/*.db-*
+
+# SQLite files
+*.db
+*.db-*
+# Docker env na raiz (secrets)
+/.env
+
 # AI Agents — transcripts, session state, project-local configs
 .claude/
 .cursor/

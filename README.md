@@ -163,8 +163,17 @@ Validação manual de campanha: [`Docs/mvp-validation-checklist.md`](Docs/mvp-va
 
 | Opção | Guia |
 |-------|------|
-| **VPS Debian/Ubuntu** | [`Docs/debian-server-install.md`](Docs/debian-server-install.md) |
+| **Docker (VPS Debian/Ubuntu)** | [`Docs/debian-server-install.md`](Docs/debian-server-install.md) — Compose + SQLite no host |
 | **PaaS** (Vercel + Railway) | Mesmas variáveis; backend com SQLite persistente |
+
+Deploy local com Docker:
+
+```bash
+cp .env.docker.example .env   # edite secrets
+docker compose up -d --build
+```
+
+O SQLite fica em `WFRP_DATA_DIR` (padrão `./data` no host).
 
 ---
 

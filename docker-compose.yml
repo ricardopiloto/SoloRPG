@@ -1,0 +1,47 @@
+# WFRP Solo — deploy com Docker
+#
+# Uso:
+#   cp .env.docker.example .env   # edite secrets e URLs
+#   mkdir -p "${WFRP_DATA_DIR:-./data}"
+#   docker compose up -d --build
+#
+# O SQLite fica no host em WFRP_DATA_DIR (bind mount → /data no container).
+
+services:
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:////data/wfrp_solo.db
+    volumes:
+      - ${WFRP_DATA_DIR:-./data}:/data
+    ports:
+      - "${BACKEND_BIND:-127.0.0.1:8000}:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_APP_ENV: ${NEXT_PUBLIC_APP_ENV:-production}
+        NEXT_PUBLIC_ENABLE_CUSTOM_CHARGEN: ${NEXT_PUBLIC_ENABLE_CUSTOM_CHARGEN:-false}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_BIND:-127.0.0.1:3000}:3000"
