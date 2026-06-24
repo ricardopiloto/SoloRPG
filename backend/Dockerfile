@@ -5,10 +5,12 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app ./app
+COPY backend/app ./app
+# Copia Docs para /Docs (espelha a estrutura local — prompts.py usa parents[3]/Docs)
+COPY Docs /Docs
 
 EXPOSE 8000
 

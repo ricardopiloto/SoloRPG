@@ -1,16 +1,20 @@
 # WFRP Solo — deploy com Docker
 #
 # Uso:
-#   cp .env.docker.example .env   # edite secrets e URLs
-#   mkdir -p "${WFRP_DATA_DIR:-./data}"
+#   cp .env.docker.example .env         # edite secrets e URLs
+#   mkdir -p /opt/apps/solorpg/data     # (ou WFRP_DATA_DIR=./data para dev local)
 #   docker compose up -d --build
 #
-# O SQLite fica no host em WFRP_DATA_DIR (bind mount → /data no container).
+# Separação de responsabilidades:
+#   /opt/apps/solorpg/app/   ← este repo (pode ser deletado/atualizado)
+#   /opt/apps/solorpg/data/  ← SQLite (bind mount → /data no container)
+#                               NÃO é apagado com "docker compose down"
 
 services:
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     env_file: .env
     environment:

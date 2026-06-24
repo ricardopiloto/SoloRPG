@@ -1,8 +1,34 @@
-# Instalação em servidor Linux (Debian)
+# Deploy em servidor Linux (Ubuntu / Debian)
 
-Guia passo a passo para implantar o **WFRP Solo** em um servidor **Debian 12** (ou Ubuntu 22.04+) com **Docker Compose**, **SQLite** persistido no disco do host e **nginx** como reverse proxy.
+Guia passo a passo para implantar o **WFRP Solo** em um servidor **Ubuntu 24.04/26.04** (ou Debian 12) com **Docker Compose**, **SQLite persistido fora do repo**, **Caddy** como reverse proxy e **Cloudflare Tunnel** para TLS e roteamento externo.
 
-**Cenário:** teste controlado ou produção self-hosted (alternativa a Vercel + Railway).
+**Cenário de referência usado neste guia:**
+
+| Item | Valor |
+|------|-------|
+| Domínio (frontend) | `solorpg.1nodado.com.br` |
+| Domínio (API) | `api.solorpg.1nodado.com.br` |
+| Diretório do repo | `/opt/apps/solorpg/app` |
+| Banco de dados | `/opt/apps/solorpg/data/wfrp_solo.db` |
+
+> Ajuste os paths e domínios conforme o seu ambiente.
+
+---
+
+## Por que o banco fica fora do repo?
+
+```
+/opt/apps/solorpg/
+├── data/    ← SQLite aqui — NUNCA apagado com docker compose down
+└── app/     ← git clone (docker-compose.yml, Dockerfiles, etc.)
+```
+
+O `docker-compose.yml` monta `/opt/apps/solorpg/data` dentro do container como `/data` (bind mount). Se você:
+
+- Fizer `docker compose down` → containers somem, dados intactos
+- Fizer `docker compose down -v` → mesma coisa (não há volume nomeado)
+- Deletar `/opt/apps/solorpg/app/` → dados em `data/` permanecem
+- Fizer rollback do repo → banco não é afetado
 
 ---
 
@@ -10,14 +36,14 @@ Guia passo a passo para implantar o **WFRP Solo** em um servidor **Debian 12** (
 
 | Item | Versão mínima |
 |------|----------------|
-| SO | Debian 12 / Ubuntu 22.04 LTS |
+| SO | Ubuntu 22.04+ / Debian 12 |
 | RAM | 2 GB (4 GB recomendado com LLM ativo) |
 | Disco | 10 GB livres |
 | Docker | Engine 24+ e Compose v2 |
-| Domínio | Opcional (HTTPS recomendado) |
-| Portas | 80, 443 (nginx no host) |
+| Domínio | Dois registros DNS apontando para o IP do servidor |
+| Portas | Somente 80 local (Caddy); Cloudflare Tunnel expõe HTTPS externamente |
 
-Contas/API keys necessárias:
+Contas/chaves necessárias:
 
 - Chave **DeepSeek** (`DEEPSEEK_API_KEY`)
 - **ADMIN_PASSWORD** (fase 1 — login fixo; mín. 8 caracteres)
@@ -30,59 +56,66 @@ Contas/API keys necessárias:
 
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y git curl nginx certbot python3-certbot-nginx sqlite3
+sudo apt install -y git sqlite3
 ```
 
-### Docker Engine + Compose
+> **Caddy e Docker** já estão instalados no servidor. Confirme que o usuário `adminvtt` está no grupo `docker`:
+>
+> ```bash
+> groups adminvtt          # deve listar "docker"
+> docker compose version   # deve mostrar v2.x
+> ```
+>
+> Se `docker` não aparecer nos grupos:
+>
+> ```bash
+> sudo usermod -aG docker adminvtt
+> newgrp docker
+> ```
+
+### Estrutura de diretórios
 
 ```bash
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker "$USER"
-# Relogue ou: newgrp docker
-docker compose version
+# Cria repo + dados SEPARADOS — chave para persistência do banco
+sudo mkdir -p /opt/apps/solorpg/data /opt/apps/solorpg/app
+sudo chown -R adminvtt:adminvtt /opt/apps/solorpg
 ```
-
-### Diretório de dados (SQLite no host)
-
-O banco **não fica dentro do container** — é um bind mount para um path no servidor. Assim você pode fazer backup, inspecionar com `sqlite3` e trocar containers sem perder dados.
-
-```bash
-sudo mkdir -p /opt/wfrp-solo/data /opt/wfrp-solo/app
-sudo chown -R "$USER":"$USER" /opt/wfrp-solo
-```
-
-Arquivo esperado após a primeira subida: `/opt/wfrp-solo/data/wfrp_solo.db`
 
 ---
 
 ## 2. Clonar o repositório
 
 ```bash
-cd /opt/wfrp-solo
+cd /opt/apps/solorpg
 git clone https://github.com/SEU_USUARIO/SoloRPG.git app
 cd app
 ```
 
-Substitua a URL pelo repositório real.
+> Substitua pela URL real do seu repositório.
 
 ---
 
-## 3. Configurar ambiente
+## 3. Configurar o ambiente
 
 ```bash
 cp .env.docker.example .env
+nano .env          # ou vim, ou qualquer editor
 ```
 
-Edite `.env` na **raiz do repo** (`/opt/wfrp-solo/app/.env`):
+Valores para o cenário de referência:
 
 ```env
-WFRP_DATA_DIR=/opt/wfrp-solo/data
+# Onde o banco fica no HOST
+WFRP_DATA_DIR=/opt/apps/solorpg/data
+
+# Portas internas (Caddy faz o proxy externo)
 BACKEND_BIND=127.0.0.1:8000
 FRONTEND_BIND=127.0.0.1:3000
 
 APP_ENV=production
 
-JWT_SECRET=GERE_STRING_ALEATORIA_32_CARACTERES_OU_MAIS
+# Gere com: openssl rand -hex 32
+JWT_SECRET=COLE_STRING_ALEATORIA_AQUI
 JWT_EXPIRE_DAYS=7
 
 AUTH_MODE=fixed_admin
@@ -94,203 +127,304 @@ LLM_PROVIDER=deepseek
 DEEPSEEK_API_KEY=sua-chave-deepseek
 LLM_MODEL=deepseek-chat
 
-CORS_ORIGINS=https://rpg.seudominio.com
-API_BASE_URL=https://api.rpg.seudominio.com
+API_BASE_URL=https://api.solorpg.1nodado.com.br
+CORS_ORIGINS=https://solorpg.1nodado.com.br
 
 ENABLE_CUSTOM_CHARGEN=false
 
-NEXT_PUBLIC_API_URL=https://api.rpg.seudominio.com
+# Variáveis de build-time do Next.js
+NEXT_PUBLIC_API_URL=https://api.solorpg.1nodado.com.br
 NEXT_PUBLIC_APP_ENV=production
 NEXT_PUBLIC_ENABLE_CUSTOM_CHARGEN=false
 ```
 
-Gerar `JWT_SECRET`:
+Gerar JWT_SECRET:
 
 ```bash
 openssl rand -hex 32
 ```
 
-> **Nota:** `DATABASE_URL` é definido no `docker-compose.yml` como `sqlite+aiosqlite:////data/wfrp_solo.db` (path `/data` dentro do container = `WFRP_DATA_DIR` no host). Use **1 worker** uvicorn (SQLite write lock).
+> **Nota:** `DATABASE_URL` é definido automaticamente no `docker-compose.yml` como
+> `sqlite+aiosqlite:////data/wfrp_solo.db` — o path `/data` dentro do container
+> corresponde a `WFRP_DATA_DIR` no host. Não altere isso.
 
 ---
 
 ## 4. Subir com Docker Compose
 
 ```bash
-cd /opt/wfrp-solo/app
-mkdir -p /opt/wfrp-solo/data
+cd /opt/apps/solorpg/app
+
+# Confirma que o diretório de dados existe
+ls -la /opt/apps/solorpg/data
+
+# Build + start
 docker compose up -d --build
-docker compose ps
-docker compose logs -f backend   # Ctrl+C para sair
+
+# Acompanhar logs
+docker compose logs -f backend    # Ctrl+C para sair
+docker compose ps                 # deve mostrar ambos "running"
 ```
 
 Verificar saúde:
 
 ```bash
-curl -s http://127.0.0.1:8000/health | jq .
+curl -s http://127.0.0.1:8000/health | python3 -m json.tool
 # {"status":"ok","database_ok":true,...}
 
-ls -la /opt/wfrp-solo/data/
-# wfrp_solo.db criado no host
+ls -la /opt/apps/solorpg/data/
+# wfrp_solo.db criado no HOST pelo container
 ```
 
 Comandos úteis:
 
 ```bash
-docker compose restart backend frontend
-docker compose down          # para containers; dados em /opt/wfrp-solo/data permanecem
-docker compose up -d --build # rebuild após git pull
-```
+# Parar/iniciar (dados intactos)
+docker compose stop
+docker compose start
 
----
+# Parar e remover containers (dados intactos)
+docker compose down
 
-## 5. nginx (reverse proxy no host)
+# Rebuild após git pull
+git pull
+docker compose up -d --build
 
-Substitua `rpg.seudominio.com` e `api.rpg.seudominio.com` pelos seus domínios. Os containers escutam só em `127.0.0.1`; nginx expõe 80/443.
-
-```bash
-sudo tee /etc/nginx/sites-available/wfrp-solo <<'NGINX'
-server {
-    listen 80;
-    server_name rpg.seudominio.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-
-server {
-    listen 80;
-    server_name api.rpg.seudominio.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 300s;
-    }
-}
-NGINX
-
-sudo ln -sf /etc/nginx/sites-available/wfrp-solo /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-### HTTPS (Let's Encrypt)
-
-```bash
-sudo certbot --nginx -d rpg.seudominio.com -d api.rpg.seudominio.com
-```
-
-Atualize `CORS_ORIGINS`, `API_BASE_URL` e `NEXT_PUBLIC_API_URL` para `https://`, depois **rebuild do frontend** (variáveis `NEXT_PUBLIC_*` são de build-time):
-
-```bash
-cd /opt/wfrp-solo/app
+# Rebuild só do frontend (após mudar NEXT_PUBLIC_*)
 docker compose up -d --build frontend
 ```
 
 ---
 
-## 6. Backup do banco
+## 5. Cloudflare Tunnel + DNS
 
-O arquivo está no host em `WFRP_DATA_DIR` (ex.: `/opt/wfrp-solo/data/wfrp_solo.db`).
+### Como funciona o fluxo
 
-```bash
-# Com backend parado (recomendado):
-cd /opt/wfrp-solo/app
-docker compose stop backend
-cp /opt/wfrp-solo/data/wfrp_solo.db "/opt/wfrp-solo/data/wfrp_solo.db.$(date +%Y%m%d)"
-docker compose start backend
+```
+Usuário (HTTPS) → Cloudflare → cloudflared (túnel) → localhost:80 (Caddy) → containers
 ```
 
-Inspeção manual:
+- O **TLS é gerenciado pelo Cloudflare** — o servidor nunca vê HTTPS
+- O Caddy recebe HTTP simples na porta 80 e roteia pelo `Host` header
+- **Não é necessário** registrar A/AAAA no DNS — o tunnel usa CNAME automático
 
-```bash
-sqlite3 /opt/wfrp-solo/data/wfrp_solo.db ".tables"
+### 5a. Adicionar os CNAMEs no painel Cloudflare
+
+No DNS do domínio `1nodado.com.br`, crie dois registros CNAME apontando para o tunnel:
+
+| Tipo | Nome | Destino | Proxy |
+|------|------|---------|-------|
+| CNAME | `solorpg` | `<tunnel-id>.cfargotunnel.com` | ✅ Proxied |
+| CNAME | `api.solorpg` | `<tunnel-id>.cfargotunnel.com` | ✅ Proxied |
+
+Substitua `<tunnel-id>` pelo seu: `245bcb96-a72e-4df3-9bad-74d6d1e7a6a9`
+
+### 5b. Adicionar ao `config.yml` do cloudflared
+
+Edite o arquivo de configuração do túnel (ex.: `/etc/cloudflared/config.yml`) e acrescente as duas entradas **antes** do catch-all final:
+
+```yaml
+  - hostname: solorpg.1nodado.com.br
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: solorpg.1nodado.com.br
+
+  - hostname: api.solorpg.1nodado.com.br
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: api.solorpg.1nodado.com.br
 ```
 
-Agende cron diário se necessário.
+Reiniciar o tunnel para aplicar:
+
+```bash
+sudo systemctl restart cloudflared
+sudo systemctl status cloudflared
+```
 
 ---
 
-## 7. Smoke test pós-deploy
+## 6. Caddy (reverse proxy local)
 
-1. Abra `https://rpg.seudominio.com/login`
-2. Entre com a senha definida em `ADMIN_PASSWORD` → home com personagem starter
-3. `/register` redireciona para login; `POST /api/auth/register` retorna 404
-4. Escolha pré-gerado em `/character` → inicie campanha → 1 sessão
-5. Troque `ADMIN_PASSWORD` no `.env`, `docker compose restart backend` e confirme login com a nova senha
+O Caddyfile usa um único bloco `:80` com `auto_https off` e matchers nomeados por `host`. Acrescente os dois blocos abaixo **dentro** do bloco `:80 { }` existente, junto com os demais sites:
+
+```caddyfile
+    @solorpg host solorpg.1nodado.com.br
+    handle @solorpg {
+        reverse_proxy localhost:3000
+    }
+
+    @api-solorpg host api.solorpg.1nodado.com.br
+    handle @api-solorpg {
+        reverse_proxy localhost:8000 {
+            transport http {
+                response_header_timeout 5m
+            }
+        }
+    }
+```
+
+> O timeout de 5 minutos na API é necessário porque chamadas ao LLM (DeepSeek) podem demorar.
+
+Exemplo do Caddyfile completo após a adição (trecho relevante):
+
+```caddyfile
+{
+    auto_https off
+}
+
+:80 {
+    # ... outros sites existentes ...
+
+    @solorpg host solorpg.1nodado.com.br
+    handle @solorpg {
+        reverse_proxy localhost:3000
+    }
+
+    @api-solorpg host api.solorpg.1nodado.com.br
+    handle @api-solorpg {
+        reverse_proxy localhost:8000 {
+            transport http {
+                response_header_timeout 5m
+            }
+        }
+    }
+}
+```
+
+Aplicar sem derrubar os outros sites:
 
 ```bash
-curl -s https://api.rpg.seudominio.com/health
+sudo caddy validate --config /etc/caddy/Caddyfile   # verifica sintaxe
+sudo systemctl reload caddy
+```
+
+Testar a partir do próprio servidor (HTTP direto ao Caddy, sem tunnel):
+
+```bash
+curl -s -H "Host: api.solorpg.1nodado.com.br" http://localhost/health
+# {"status":"ok","database_ok":true,...}
+
+# Após tunnel configurado e DNS propagado, testar via HTTPS (Cloudflare):
+curl -s https://api.solorpg.1nodado.com.br/health
+```
+
+> **Nota:** como `NEXT_PUBLIC_API_URL` é uma variável de **build-time** do Next.js, o `.env` deve ter `https://api.solorpg.1nodado.com.br` **antes** do `docker compose up --build`. Se precisar alterar depois:
+>
+> ```bash
+> cd /opt/apps/solorpg/app
+> docker compose up -d --build frontend
+> ```
+
+---
+
+## 7. Interagir com o banco diretamente
+
+O arquivo está no host, **acessível a qualquer momento** — sem precisar entrar no container:
+
+```bash
+# Listar tabelas
+sqlite3 /opt/apps/solorpg/data/wfrp_solo.db ".tables"
+
+# Query direta
+sqlite3 /opt/apps/solorpg/data/wfrp_solo.db "SELECT * FROM users;"
+
+# Modo interativo
+sqlite3 /opt/apps/solorpg/data/wfrp_solo.db
+```
+
+Para inspecionar sem parar o backend (leitura é segura com SQLite WAL mode):
+
+```bash
+sqlite3 /opt/apps/solorpg/data/wfrp_solo.db "PRAGMA journal_mode;"
 ```
 
 ---
 
-## 8. Atualizações
+## 8. Backup do banco
 
 ```bash
-cd /opt/wfrp-solo/app
+# Backup com backend rodando (SQLite WAL — geralmente seguro)
+cp /opt/apps/solorpg/data/wfrp_solo.db \
+   "/opt/apps/solorpg/data/wfrp_solo.db.$(date +%Y%m%d_%H%M)"
+
+# Backup garantido (para o backend primeiro)
+docker compose -f /opt/apps/solorpg/app/docker-compose.yml stop backend
+cp /opt/apps/solorpg/data/wfrp_solo.db \
+   "/opt/apps/solorpg/data/wfrp_solo.db.$(date +%Y%m%d_%H%M)"
+docker compose -f /opt/apps/solorpg/app/docker-compose.yml start backend
+```
+
+Cron diário (como root ou com sudo):
+
+```bash
+sudo crontab -e
+# Adicione:
+# 3 2 * * * cp /opt/apps/solorpg/data/wfrp_solo.db "/opt/apps/solorpg/data/wfrp_solo.db.$(date +\%Y\%m\%d)" 2>&1
+```
+
+---
+
+## 9. Smoke test pós-deploy
+
+```bash
+# API saudável
+curl -s https://api.solorpg.1nodado.com.br/health
+
+# Frontend acessível
+curl -Is https://solorpg.1nodado.com.br | head -5
+```
+
+1. Abra `https://solorpg.1nodado.com.br/login`
+2. Entre com a senha definida em `ADMIN_PASSWORD`
+3. Personagem pré-gerado deve aparecer em `/character`
+4. `/register` deve redirecionar para `/login` (fase 1)
+
+---
+
+## 10. Atualizações
+
+```bash
+cd /opt/apps/solorpg/app
 git pull
 docker compose up -d --build
+# O banco em /opt/apps/solorpg/data/ não é tocado
 ```
-
-Se alterou `NEXT_PUBLIC_*`, o rebuild do frontend é obrigatório (já incluído em `--build`).
 
 ---
 
-## 9. Troubleshooting
+## 11. Troubleshooting
 
 | Problema | Solução |
 |----------|---------|
 | Backend não sobe | `docker compose logs backend` — verificar `JWT_SECRET` e `ADMIN_PASSWORD` |
-| `database_ok: false` | Permissões em `WFRP_DATA_DIR`; volume montado em `/data` |
-| CORS error no browser | `CORS_ORIGINS` deve bater com URL do frontend (com `https://`) |
-| Frontend chama API errada | Rebuild frontend após mudar `NEXT_PUBLIC_API_URL` |
-| E-mail não chega | Testar SMTP com `swaks` ou logs do provider (`multi_user` only) |
-| 403 em wizard | Esperado — `ENABLE_CUSTOM_CHARGEN=false` na fase 1 |
-| Imagens não carregam | Configurar Cloudflare ou aceitar placeholder |
+| `database_ok: false` | Permissões em `/opt/apps/solorpg/data`; verificar `ls -la` |
+| CORS error no browser | `CORS_ORIGINS` deve ser exatamente `https://solorpg.1nodado.com.br` |
+| Frontend chama API errada | Rebuild após mudar `NEXT_PUBLIC_API_URL`: `docker compose up -d --build frontend` |
+| 502 Bad Gateway | Container não subiu; `docker compose ps` e `docker compose logs` |
+| Caddy tenta HTTPS e falha | Confirmar prefixo `http://` no Caddyfile para esses domínios |
+| Caddy: `address already in use` | Outra porta 80/443 ocupada; `sudo ss -tlnp \| grep ':80'` |
+| Tunnel não roteia / 502 | `sudo systemctl status cloudflared`; verificar entradas no `config.yml` |
+| Tunnel: host não reconhecido | Confirmar CNAME no painel Cloudflare com proxy ativo (laranja) |
+| 403 em wizard de personagem | Esperado — `ENABLE_CUSTOM_CHARGEN=false` na fase 1 |
+| Imagens não carregam | Configurar `CLOUDFLARE_*` ou aceitar placeholder |
 
 ---
 
-## 10. Desenvolvimento local com Docker
+## 12. Desenvolvimento local com Docker
 
-Na raiz do repo (sem nginx):
+Na raiz do repo (sem Caddy):
 
 ```bash
 cp .env.docker.example .env
-# Ajuste ADMIN_PASSWORD, LLM_PROVIDER=mock, etc.
-# WFRP_DATA_DIR=./data (padrão)
+# Edite: ADMIN_PASSWORD, DEEPSEEK_API_KEY (ou LLM_PROVIDER=mock)
+# WFRP_DATA_DIR pode ficar como ./data
 
 docker compose up --build
 ```
 
-Acesse **http://127.0.0.1:3000** (frontend) e **http://127.0.0.1:8000/health** (API). O banco fica em `./data/wfrp_solo.db` no seu workspace.
-
----
-
-## Alternativa: deploy gerenciado (sem Docker)
-
-| Componente | Serviço |
-|------------|---------|
-| Frontend | Vercel (`frontend/`) |
-| Backend | Railway ou Fly.io (`backend/`) + volume persistente para `.db` |
-
-Variáveis de ambiente: ver `.env.example`. Ver também o [README](../README.md) §Deploy.
-
----
-
-## Alternativa: instalação nativa (systemd)
-
-Se preferir **sem containers**, instale Python 3.11+, Node 20+, venv, systemd e nginx manualmente. O banco continua em `/opt/wfrp-solo/data/wfrp_solo.db` com `DATABASE_URL=sqlite+aiosqlite:////opt/wfrp-solo/data/wfrp_solo.db`. Consulte commits anteriores deste guia ou a documentação em `README.md` §Instalação local.
+Acesse **http://127.0.0.1:3000** (frontend) e **http://127.0.0.1:8000/health** (API).
+Banco fica em `./data/wfrp_solo.db` no workspace.
 
 ---
 
@@ -298,5 +432,5 @@ Se preferir **sem containers**, instale Python 3.11+, Node 20+, venv, systemd e 
 
 - [Arquitetura](architecture.md)
 - [Checklist de validação MVP](mvp-validation-checklist.md)
-- [Schema do banco](database-schema.md)
-- [`docker-compose.yml`](../docker-compose.yml) e [`.env.docker.example`](../.env.docker.example)
+- [`docker-compose.yml`](../docker-compose.yml)
+- [`.env.docker.example`](../.env.docker.example)

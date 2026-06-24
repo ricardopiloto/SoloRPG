@@ -1,0 +1,14 @@
+# Ignorado no build context do backend (context: .)
+frontend/node_modules
+frontend/.next
+frontend/out
+backend/.venv
+backend/__pycache__
+backend/*.py[cod]
+backend/.pytest_cache
+backend/tests
+backend/*.db
+backend/generated_images
+.git
+.env
+*.env.local

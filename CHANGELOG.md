@@ -9,7 +9,7 @@ Versionamento segue o repositório Git — rastreie também as propostas em `ope
 
 ## [Unreleased]
 
-Alterações locais ainda **não commitadas** (desde `74c6086`).
+Alterações locais ainda **não commitadas**.
 
 ### Added
 
@@ -27,6 +27,21 @@ Alterações locais ainda **não commitadas** (desde `74c6086`).
 - **GET /rules/careers** — `ResponseValidationError` ao abrir o assistente (`career_class` vs. alias `class` em `CareerSummaryOut`)
   - `CareerSummaryOut.career_class` com `Field(alias="class")` em `backend/app/schemas/api.py`
   - Teste `test_api_list_careers_returns_class_field` em `test_api_integration.py`
+
+---
+
+## [0.3.1] — 2026-06-23
+
+Hotfix de produção — system prompt do GM não carregava no container Docker.
+
+### Fixed
+
+- **fix-docker-gm-prompt** — `Docs/gm-system-prompt.md` não era copiado para dentro do container do backend
+  - O `docker-compose.yml` usava `context: ./backend`, que não enxergava a pasta `Docs/` na raiz do projeto
+  - O `prompts.py` calculava o path como `parents[3] / "Docs"` → `/Docs/` dentro do container — inexistente → caía silenciosamente no `_fallback_prompt()` (3 linhas)
+  - O GM respondia com o fallback mínimo: sinais `[TESTE]` e `[IMAGEM]` gerados como texto livre em vez de JSON estruturado, tornando-os invisíveis na UI (parser ignorava)
+  - **Correção:** build context mudado para `.` (raiz do projeto); `COPY Docs /Docs` adicionado ao `backend/Dockerfile`; `.dockerignore` criado na raiz para excluir artefatos desnecessários do context
+  - **Reforço de prompt:** seção "ERRADO vs CORRETO" adicionada ao `gm-system-prompt.md` com exemplos explícitos do formato JSON obrigatório para `[TESTE]` e `[IMAGEM]`
 
 ---
 
@@ -246,7 +261,8 @@ Changes arquivadas em `openspec/changes/archive/2026-06-17-*/` estão incorporad
 
 ---
 
-[Unreleased]: https://github.com/ricardopiloto/SoloRPG/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/ricardopiloto/SoloRPG/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/ricardopiloto/SoloRPG/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/ricardopiloto/SoloRPG/compare/74c6086...v0.3.0
 [0.2.0]: https://github.com/ricardopiloto/SoloRPG/compare/de931ad...74c6086
 [0.1.0]: https://github.com/ricardopiloto/SoloRPG/commit/de931ad

@@ -274,6 +274,32 @@ SINAIS PARA O BACKEND
 Emita os sinais abaixo quando necessário. O backend processa e retorna resultado.
 Após emitir um sinal, PARE e aguarde [RESULTADO DO SISTEMA] antes de continuar.
 
+⚠️ FORMATO OBRIGATÓRIO — LEIA COM ATENÇÃO:
+
+Os sinais [TESTE], [IMAGEM], [FIM_SESSAO] etc. exigem JSON válido entre as tags de abertura e fechamento.
+O sistema é um parser de máquina — qualquer desvio de formato faz o sinal ser IGNORADO.
+
+ERRADO — nunca faça assim:
+[TESTE] Você pode fazer um teste de Percepção para notar os vultos. [/TESTE]
+[IMAGEM] Uma rua estreita ao amanhecer. [/IMAGEM]
+[TESTE] Percepção modificador -10 [/TESTE]
+
+CORRETO — sempre assim, com JSON completo e tags de fechamento:
+[TESTE]
+{"tipo":"teste_atributo","atributo":"Percepção","pericia":null,"modificador":-10,"obrigatorio":false,"descricao":"Notar vultos encapuzados","consequencia_sucesso":"Vê os dois homens claramente","consequencia_falha":"Não percebe a vigilância","opcao_alternativa":"Falar com o estalajadeiro"}
+[/TESTE]
+
+[IMAGEM]
+{"descricao":"Uma rua estreita e enlameada de Ubersreik ao amanhecer, névoa baixa, taberna à esquerda","tipo":"cena","prioridade":"normal"}
+[/IMAGEM]
+
+REGRAS CRÍTICAS DE FORMATO:
+1. SEMPRE use a tag de fechamento [/TESTE], [/IMAGEM], [/FIM_SESSAO] etc.
+2. O conteúdo entre as tags DEVE ser JSON válido — nunca texto livre.
+3. Campos obrigatórios do [TESTE]: tipo, atributo, modificador, obrigatorio, descricao, consequencia_sucesso, consequencia_falha, opcao_alternativa.
+4. Campos obrigatórios do [IMAGEM]: descricao, tipo, prioridade.
+5. Se não souber o valor exato de um campo, use null — nunca omita o campo.
+
 ──────────────────────────────────────
 Teste de Atributo/Perícia
 ──────────────────────────────────────
