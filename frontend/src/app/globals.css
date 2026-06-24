@@ -98,6 +98,15 @@ body {
   .chat-input-area {
     @apply shrink-0 p-4 border-t border-wfrp-border;
   }
+  .chat-input-textarea {
+    @apply flex-1 bg-wfrp-surface border border-wfrp-border rounded px-3 py-2 text-wfrp-fg;
+    resize: none;
+    field-sizing: content;
+    min-height: 2.25rem;
+    max-height: 8rem;
+    overflow-y: auto;
+    line-height: 1.5;
+  }
 
   .chat-attribution {
     @apply text-[10px] uppercase tracking-[0.18em] text-wfrp-accent/40 mb-1 select-none font-sans;
@@ -282,8 +291,33 @@ body {
     @apply underline decoration-wfrp-accent/60 decoration-1 underline-offset-2;
   }
 
-  .skill-row-meta {
-    @apply text-wfrp-muted font-mono text-[11px] shrink-0 tabular-nums;
+  .skill-row-header,
+  .skill-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 2rem 2rem 2.5rem;
+    column-gap: 0.5rem;
+    align-items: baseline;
+  }
+
+  .skill-row-header {
+    @apply text-[10px] uppercase tracking-wide text-wfrp-muted pb-1 select-none;
+  }
+
+  .skill-row-name {
+    @apply flex min-w-0 items-baseline;
+  }
+
+  .skill-row-leader {
+    @apply flex-1 min-w-[0.5rem] ml-1 self-end mb-0.5 border-b border-dashed border-wfrp-border/25;
+  }
+
+  .skill-row-attr,
+  .skill-row-adv {
+    @apply text-wfrp-muted font-mono text-[11px] shrink-0 tabular-nums text-right;
+  }
+
+  .skill-row-target {
+    @apply text-wfrp-fg font-mono text-[11px] shrink-0 tabular-nums text-right;
   }
 
   .wounds-bar {

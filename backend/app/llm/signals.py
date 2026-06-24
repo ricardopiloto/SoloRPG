@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 SIGNAL_PATTERN = re.compile(
-    r"\[(TESTE|IMAGEM|FIM_SESSAO|NOVA_CAMPANHA|ACAO_SISTEMA|ESTADO_COMBATE)\]\s*"
+    r"\[(TESTE|IMAGEM|FIM_SESSAO|NOVA_CAMPANHA|ACAO_SISTEMA|ESTADO_COMBATE|MUSICA)\]\s*"
     r"(\{[\s\S]*?\})\s*\[/\1\]",
     re.MULTILINE,
 )

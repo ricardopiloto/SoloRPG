@@ -14,6 +14,7 @@ import {
 } from "@/lib/api";
 import type { ChatEntry } from "@/components/session/ChatLog";
 import type { QuickRollTarget } from "@/components/character/QuickRollPopover";
+import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 
 function turnsToEntries(turns: SessionTurnOut[]): ChatEntry[] {
   return turns.flatMap((t): ChatEntry[] => {
@@ -42,6 +43,7 @@ function turnsToEntries(turns: SessionTurnOut[]): ChatEntry[] {
 
 export function useSessionPlay(sessionId: string) {
   const router = useRouter();
+  const { setMood } = useAudioPlayer();
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [character, setCharacter] = useState<Character | null>(null);
   const [entries, setEntries] = useState<ChatEntry[]>([]);
@@ -142,6 +144,9 @@ export function useSessionPlay(sessionId: string) {
 
   const applyMeta = useCallback(
     async (result: TurnResponse) => {
+      if (result.scene_mood) {
+        setMood(result.scene_mood);
+      }
       appendImages(result.images);
       appendRolls(result.roll_results);
       if (session) {
@@ -191,7 +196,7 @@ export function useSessionPlay(sessionId: string) {
         setCharacter(await api.getCharacter(character.id));
       }
     },
-    [session, character, router, appendImages, appendRolls]
+    [session, character, router, appendImages, appendRolls, setMood]
   );
 
   const runStreamTurn = useCallback(

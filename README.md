@@ -12,7 +12,8 @@ Aplicação web de **RPG solo** baseada em **Warhammer Fantasy Roleplay 4ª edi�
 |-----|-----------|
 | **Jogar solo** | Campanhas WFRP4e sem grupo ou GM humano |
 | **Sessões pausáveis** | Timer visível; retome de onde parou |
-| **Progressão real** | XP, perícias e talentos entre sessões (regras WFRP4e em código) |
+| **Trilha ambiente** | Menu só no lobby (~12% volume), tensão in-game via `[MUSICA]` (~8%); trilha **não reinicia** ao trocar telas de lobby; botão **Silenciar** global (persiste entre rotas); uma faixa audível por vez |
+| **Progressão real** | XP, perícias e talentos entre sessões; contador de avanços persistido corretamente no backend |
 | **Teste controlado** | Contas isoladas por usuário; fase 1 com pré-gerados + starter automático |
 
 **Loop típico:** login → personagem → campanha → sessão (texto + rolagens) → recap + XP → progressão.
@@ -40,9 +41,9 @@ O projeto segue metodologia **OpenSpec**: cada feature nasce como proposta em `o
 **Convenções:**
 
 - Regras WFRP4e **sempre no backend** — a LLM nunca rola dados nem calcula ferimentos
-- Protocolo de **sinais JSON** (`[TESTE]`, `[IMAGEM]`, `[FIM_SESSAO]`, …) entre LLM e código
+- Protocolo de **sinais JSON** (`[TESTE]`, `[IMAGEM]`, `[MUSICA]`, `[FIM_SESSAO]`, …) entre LLM e código
 - Interface em **PT-BR** (i18n desde o início)
-- Testes: **pytest** (API + regras) e **Playwright** (loop E2E)
+- Testes: **pytest** (API + regras, incl. progressão multi-compra) e **Playwright** (loop E2E); `npm run test:unit` no frontend (áudio, roteamento mute, dice `safeClear`)
 
 Documentação de produto e prompts em [`Docs/`](Docs/README.md). Especificações ativas em `openspec/changes/`.
 
@@ -113,9 +114,13 @@ uvicorn app.main:app --reload --port 8000
 cd frontend
 npm install
 npm run prepare:dice
+npm run prepare:audio
 cp ../.env.example .env.local
 npm run dev
 ```
+
+`prepare:dice` copia assets do DiceBox (incl. `ammo.wasm.wasm`) para `public/assets/dice-box/`.  
+`prepare:audio` copia os MP3 de `audio/` (raiz) para `frontend/public/audio/` — necessário em dev local; no Docker o build faz isso automaticamente.
 
 Acesse **http://localhost:3000**
 
@@ -153,6 +158,8 @@ Lista completa: [`.env.example`](.env.example)
 ```bash
 ./scripts/run-tests.sh
 RUN_E2E=1 ./scripts/run-tests.sh   # inclui Playwright
+cd frontend && npm run test:unit    # áudio (mute, continuidade menu, regressão), dice safeClear, rotas WFRP
+cd backend && pytest tests/test_rules.py tests/test_api_integration.py -q  # regras + API (progressão)
 ```
 
 Validação manual de campanha: [`Docs/mvp-validation-checklist.md`](Docs/mvp-validation-checklist.md)
@@ -179,11 +186,24 @@ O SQLite fica em `WFRP_DATA_DIR` (padrão `./data` no host).
 
 ## Changelog (últimas versões)
 
-### [Unreleased]
+### [0.3.2] — 2026-06-24
 
+- **Trilha sonora ambiente** — menu no lobby (12% volume); tensão in-game via `[MUSICA]` (8%); roteamento por rota; botão Silenciar global
+- **Áudio no lobby** — trilha de menu continua ao navegar entre telas de lobby (`preserve-menu-audio-across-routes`); sem sobreposição de faixas; mute respeitado em todas as rotas (`fix-audio-mute-routing-regression`)
+- **Sidebar de perícias** — tabela Nome | Atrib. | Adv. | Alvo; tooltip quando o nome trunca
+- **Chat** — textarea auto-expansível (Enter envia, Shift+Enter quebra linha)
+- **Quick roll** — rolagem só ao clicar em "Rolar agora" (sem countdown)
+- **Inventário** — guarda no backend + regra no prompt GM contra itens inexistentes
+- **Teste passivo de descoberta** — instrução no prompt GM (`obrigatorio: false`)
+- **Dados 3D em produção** — `safeClear()`, fallback na UI, headers COOP/COEP, smoke check WASM no Docker
+- **Progressão** — compras repetidas da mesma perícia acumulam `atual +N`; talentos owned mostram `· adquirido`
 - **Assistente WFRP4e** — wizard multi-step (código pronto, UI desligada na fase 1)
 
 Ver histórico completo: [`CHANGELOG.md`](CHANGELOG.md)
+
+### [0.3.1] — 2026-06-23
+
+- **Hotfix Docker** — `gm-system-prompt.md` copiado para o container; GM deixou de usar fallback mínimo em produção
 
 ### [0.3.0] — 2026-06-22
 

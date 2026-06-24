@@ -409,6 +409,67 @@ docker compose up -d --build
 | 403 em wizard de personagem | Esperado — `ENABLE_CUSTOM_CHARGEN=false` na fase 1 |
 | Imagens não carregam | Configurar `CLOUDFLARE_*` ou aceitar placeholder |
 
+### Dados 3D não aparecem (erros `colliderFaceMap` no console)
+
+Os dados 3D usam **Ammo.js** (física em WebAssembly) + Workers do browser. Dois problemas comuns em produção:
+
+#### 1. MIME type do arquivo `.wasm`
+
+O arquivo `ammo.wasm.wasm` (física Ammo.js do DiceBox) deve ser servido com `Content-Type: application/wasm`. Adicione ao seu **Caddyfile**:
+
+```caddyfile
+@wasm {
+    path *.wasm
+}
+header @wasm Content-Type "application/wasm"
+```
+
+Posicione esse bloco dentro da `handle` do domínio frontend:
+
+```caddyfile
+http://solorpg.1nodado.com.br {
+    @wasm {
+        path *.wasm
+    }
+    header @wasm Content-Type "application/wasm"
+
+    reverse_proxy localhost:3000
+}
+```
+
+Após editar: `sudo systemctl reload caddy`
+
+Verifique com:
+```bash
+curl -I https://solorpg.1nodado.com.br/assets/dice-box/assets/ammo/ammo.wasm.wasm \
+  | grep content-type
+# Esperado: content-type: application/wasm
+```
+
+#### 2. Headers COOP/COEP
+
+O Next.js já inclui esses headers via `next.config.js` desde a versão `0.3.2`. Se por algum motivo não estiverem chegando, adicione ao Caddyfile:
+
+```caddyfile
+http://solorpg.1nodado.com.br {
+    header Cross-Origin-Opener-Policy "same-origin"
+    header Cross-Origin-Embedder-Policy "require-corp"
+    reverse_proxy localhost:3000
+}
+```
+
+Verifique com:
+```bash
+curl -I https://solorpg.1nodado.com.br | grep -i "cross-origin"
+# Esperado:
+# cross-origin-opener-policy: same-origin
+# cross-origin-embedder-policy: require-corp
+```
+
+#### 3. Assets ausentes no container
+
+Se o build Docker falhar com `ERROR: ammo.wasm.wasm missing after prepare:dice`, verifique se `node_modules/@3d-dice/dice-box` existe na etapa `builder`. Isso indica que o `npm install` não instalou o pacote — confirme se `package.json` tem `"@3d-dice/dice-box": "^1.1.4"` e rebuilde do zero: `docker compose build --no-cache frontend`.
+
 ---
 
 ## 12. Desenvolvimento local com Docker

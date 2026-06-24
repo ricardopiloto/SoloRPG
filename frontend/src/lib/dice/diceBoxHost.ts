@@ -6,8 +6,20 @@
 type DiceBoxInstance = {
   init(): Promise<void>;
   roll(notation: string): Promise<Array<{ value?: number; rolls?: Array<{ value?: number }> }>>;
-  clear(): Promise<void>;
+  /** clear() may return void or Promise<void> depending on DiceBox build/state. */
+  clear(): void | Promise<void>;
 };
+
+/**
+ * Defensively call box.clear() — handles both void and Promise<void> return values.
+ * Prevents "clear().catch is not a function" TypeError in production DiceBox builds.
+ */
+export function safeClear(box: DiceBoxInstance): void {
+  const r = box.clear() as unknown;
+  if (r != null && typeof (r as Promise<void>).catch === "function") {
+    void (r as Promise<void>).catch(() => undefined);
+  }
+}
 
 type DiceBoxCtor = new (config: Record<string, unknown>) => DiceBoxInstance;
 

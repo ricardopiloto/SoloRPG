@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { AudioMuteButton } from "@/components/audio/AudioMuteButton";
 import { api, AuthConfig } from "@/lib/api";
 import { t } from "@/lib/i18n";
 
@@ -43,7 +44,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="container-wfrp py-16 max-w-md mx-auto">
+    <div className="relative min-h-dvh">
+      <div className="absolute top-4 right-4 z-10">
+        <AudioMuteButton />
+      </div>
+      <div className="container-wfrp py-16 max-w-md mx-auto">
       <p className="eyebrow">{t("auth.loginTitle")}</p>
       <h1 className="font-display text-3xl mb-6">{t("app.title")}</h1>
       {passwordOnly && (
@@ -88,6 +93,7 @@ export default function LoginPage() {
           </Link>
         </p>
       )}
+    </div>
     </div>
   );
 }

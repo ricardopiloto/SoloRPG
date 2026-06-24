@@ -38,11 +38,25 @@ def can_purchase_skill(advances: list, skill_name: str, xp_total: int, xp_spent:
     return xp_available(xp_total, xp_spent) >= SKILL_ADVANCE_COST
 
 
+def skill_advances_by_name(skills: list) -> dict[str, int]:
+    totals: dict[str, int] = {}
+    for s in skills or []:
+        name = s.get("name")
+        if name:
+            totals[name] = totals.get(name, 0) + s.get("advances", 0)
+    return totals
+
+
 def apply_skill_advance(skills: list, skill_name: str, linked_attribute: str) -> list:
-    updated = list(skills)
-    for skill in updated:
-        if skill["name"] == skill_name:
-            skill["advances"] = skill.get("advances", 0) + 1
-            return updated
-    updated.append({"name": skill_name, "advances": 1, "linked_attribute": linked_attribute})
-    return updated
+    for i, skill in enumerate(skills or []):
+        if skill.get("name") == skill_name:
+            new_adv = skill.get("advances", 0) + 1
+            return [
+                *skills[:i],
+                {**skill, "advances": new_adv},
+                *skills[i + 1 :],
+            ]
+    return [
+        *(skills or []),
+        {"name": skill_name, "advances": 1, "linked_attribute": linked_attribute},
+    ]

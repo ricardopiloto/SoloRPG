@@ -1,6 +1,6 @@
 {
   "name": "wfrp-solo-frontend",
-  "version": "0.1.0",
+  "version": "0.3.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,6 +9,7 @@
     "lint": "next lint",
     "test:unit": "npx tsx --test src/lib/**/*.test.ts",
     "prepare:dice": "mkdir -p public/assets/dice-box && cp -r node_modules/@3d-dice/dice-box/dist/* public/assets/dice-box/",
+    "prepare:audio": "mkdir -p public/audio && cp ../audio/*.mp3 public/audio/",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },

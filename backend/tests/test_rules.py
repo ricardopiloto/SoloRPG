@@ -1,6 +1,6 @@
 import pytest
 
-from app.rules.careers import validate_xp
+from app.rules.careers import apply_skill_advance, skill_advances_by_name, validate_xp
 from app.rules.combat import resolve_melee_attack
 from app.rules.criticals import resolve_critical
 from app.rules.dice import roll_d100, roll_d10
@@ -58,6 +58,25 @@ def test_xp_validation():
     assert validate_xp(10) == 30
     assert validate_xp(50) == 50
     assert validate_xp(200) == 100
+
+
+def test_apply_skill_advance_accumulates():
+    skills = [{"name": "Armas Corpo a Corpo (Básicas)", "advances": 1, "linked_attribute": "WS"}]
+    for _ in range(4):
+        skills = apply_skill_advance(skills, "Percepção", "I")
+    perc = next(s for s in skills if s["name"] == "Percepção")
+    assert perc["advances"] == 4
+
+
+def test_skill_advances_by_name_sums_duplicates():
+    skills = [
+        {"name": "Percepção", "advances": 1},
+        {"name": "Percepção", "advances": 2},
+        {"name": "Atletismo", "advances": 1},
+    ]
+    totals = skill_advances_by_name(skills)
+    assert totals["Percepção"] == 3
+    assert totals["Atletismo"] == 1
 
 
 def test_signal_parser():

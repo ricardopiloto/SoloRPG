@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { t } from "@/lib/i18n";
 
 export type QuickRollTarget = {
@@ -20,19 +20,7 @@ export function QuickRollPopover({
   onCancel: () => void;
 }) {
   const [modifier, setModifier] = useState(0);
-  const [countdown, setCountdown] = useState(2);
   const [rolling, setRolling] = useState(false);
-
-  useEffect(() => {
-    if (rolling) return;
-    if (countdown <= 0) {
-      setRolling(true);
-      void onRoll(modifier);
-      return;
-    }
-    const tmr = setTimeout(() => setCountdown((c) => c - 1), 1000);
-    return () => clearTimeout(tmr);
-  }, [countdown, rolling, modifier, onRoll]);
 
   const effectiveTarget = Math.max(1, Math.min(100, target.target + modifier));
 
@@ -86,11 +74,6 @@ export function QuickRollPopover({
           {t("session.cancel")}
         </button>
       </div>
-      {!rolling && (
-        <p className="text-xs text-wfrp-muted mt-2 text-center">
-          Rolando em {countdown}s…
-        </p>
-      )}
     </div>
   );
 }

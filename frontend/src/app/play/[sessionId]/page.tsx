@@ -10,6 +10,7 @@ import { ChatLog } from "@/components/session/ChatLog";
 import { SessionPrepareOverlay } from "@/components/session/SessionPrepareOverlay";
 import { TestBlock } from "@/components/session/TestBlock";
 import { RequireAuth } from "@/contexts/AuthContext";
+import { AudioMuteButton } from "@/components/audio/AudioMuteButton";
 import { useSessionPlay } from "@/hooks/useSessionPlay";
 import { t } from "@/lib/i18n";
 
@@ -100,6 +101,7 @@ export default function PlayPage() {
           >
             ⏸ Pausar
           </button>
+          <AudioMuteButton />
         </div>
       </header>
 
@@ -173,10 +175,10 @@ export default function PlayPage() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                const input = (e.currentTarget.elements.namedItem("action") as HTMLInputElement);
-                if (!input.value.trim() || awaitingRoll) return;
-                const v = input.value.trim();
-                input.value = "";
+                const textarea = e.currentTarget.elements.namedItem("action") as HTMLTextAreaElement;
+                if (!textarea.value.trim() || awaitingRoll) return;
+                const v = textarea.value.trim();
+                textarea.value = "";
                 void sendAction(v);
               }}
             >
@@ -187,17 +189,24 @@ export default function PlayPage() {
                     ? t("session.pendingTest")
                     : t("session.pauseHint")}
               </p>
-              <div className="flex gap-2">
-                <input
+              <div className="flex gap-2 items-end">
+                <textarea
                   name="action"
-                  className="flex-1 bg-wfrp-surface border border-wfrp-border rounded px-3 py-2 text-wfrp-fg"
+                  className="chat-input-textarea"
                   placeholder={t("session.placeholder")}
                   disabled={loading || !!awaitingRoll || diceRolling || sessionEnded}
                   autoComplete="off"
+                  rows={1}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      e.currentTarget.form?.requestSubmit();
+                    }
+                  }}
                 />
                 <button
                   type="submit"
-                  className="btn-primary px-3"
+                  className="btn-primary px-3 shrink-0"
                   disabled={loading || !!awaitingRoll || diceRolling || sessionEnded}
                   aria-label="Enviar"
                 >

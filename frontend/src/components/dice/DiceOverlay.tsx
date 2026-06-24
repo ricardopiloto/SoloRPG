@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ensureDiceBox, preloadDiceBox } from "@/lib/dice/diceBoxHost";
+import { ensureDiceBox, preloadDiceBox, safeClear } from "@/lib/dice/diceBoxHost";
 
 type RollResult = { total: number; success?: boolean; sl?: number };
 
@@ -31,6 +31,7 @@ function buildResult(total: number, target: number | undefined): RollResult {
 export function DiceOverlay({ visible, label, meta, target, onDone }: Props) {
   const [result, setResult] = useState<RollResult | null>(null);
   const [initializing, setInitializing] = useState(false);
+  const [diceUnavailable, setDiceUnavailable] = useState(false);
   const onDoneRef = useRef(onDone);
   const targetRef = useRef(target);
 
@@ -49,12 +50,16 @@ export function DiceOverlay({ visible, label, meta, target, onDone }: Props) {
 
     if (visible && !was) {
       setResult(null);
+      setDiceUnavailable(false);
       setInitializing(true);
       void (async () => {
         try {
           const box = await ensureDiceBox(STAGE_SELECTOR);
-          if (!box) throw new Error("DiceBox unavailable");
-          await box.clear();
+          if (!box) {
+            setDiceUnavailable(true);
+            throw new Error("DiceBox unavailable");
+          }
+          safeClear(box);
           const groups = await box.roll("1d100");
           const total = parseD100(groups);
           setResult(buildResult(total, targetRef.current));
@@ -72,7 +77,7 @@ export function DiceOverlay({ visible, label, meta, target, onDone }: Props) {
       setResult(null);
       setInitializing(false);
       void ensureDiceBox(STAGE_SELECTOR).then((box) => {
-        if (box) void box.clear().catch(() => undefined);
+        if (box) safeClear(box);
       });
     }
   }, [visible]);
@@ -117,9 +122,15 @@ export function DiceOverlay({ visible, label, meta, target, onDone }: Props) {
 
           <div className="flex-1" />
 
-          {initializing && !result && (
+          {initializing && !result && !diceUnavailable && (
             <p className="text-center font-mono text-xs text-wfrp-muted animate-pulse pb-10">
               Preparando dados…
+            </p>
+          )}
+
+          {diceUnavailable && !result && (
+            <p className="text-center font-mono text-xs text-wfrp-muted pb-10">
+              Dados físicos indisponíveis — usando resultado numérico
             </p>
           )}
 

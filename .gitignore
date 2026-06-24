@@ -14,6 +14,9 @@ frontend/out/
 # Dice-Box static assets (large binaries; regenerated via: cp -r node_modules/@3d-dice/dice-box/dist/* public/assets/dice-box/)
 frontend/public/assets/dice-box/
 
+# Ambient audio (copied from project root audio/ via: npm run prepare:audio)
+frontend/public/audio/
+
 # Env
 .env
 .env.local

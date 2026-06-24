@@ -1,6 +1,8 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
-### Requirement: Fortune spend prompt on failed test
+### Requirement: UI MUST show fortune re-roll prompt on failed test
+
+After a failed GM-requested test, the UI SHALL offer at most one Fortune re-roll while `fortune_reroll_available` is true.
 
 - **WHEN** a GM-requested test fails and the character has Fortune Points remaining **and** Fortune has not yet been spent on that test instance (`fortune_reroll_available = true`)
 - **THEN** the UI SHALL offer an option to spend a Fortune Point to re-roll once

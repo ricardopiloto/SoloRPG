@@ -105,7 +105,7 @@ export default function ProgressionPage() {
               {talent.name}
               <span className="text-wfrp-muted text-sm ml-2">
                 {talent.cost} XP
-                {talent.owned && " · possuído"}
+                {talent.owned && " · adquirido"}
               </span>
             </button>
           ))}

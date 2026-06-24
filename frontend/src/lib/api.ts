@@ -139,6 +139,7 @@ export type TurnResponse = {
   turn_phase?: string;
   pending_test?: PendingTest | null;
   combat_state?: CombatState | null;
+  scene_mood?: string | null;
 };
 
 export type SessionDetail = GameSession & {

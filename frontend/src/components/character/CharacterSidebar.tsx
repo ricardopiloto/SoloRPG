@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import { api, type Character } from "@/lib/api";
 import { t } from "@/lib/i18n";
-import { computeSkillTarget, formatSkillRowMeta, type SkillCatalogEntry } from "@/lib/wfrp-attributes";
+import { computeSkillTarget, type SkillCatalogEntry } from "@/lib/wfrp-attributes";
 import { AttributeCards } from "./AttributeCards";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { FateGems } from "./FateGems";
 import { WoundsBar } from "./WoundsBar";
+import { TruncatedText } from "@/components/ui/TruncatedText";
 import { QuickRollPopover, type QuickRollTarget } from "./QuickRollPopover";
 
 export function CharacterSidebar({
@@ -79,29 +80,38 @@ export function CharacterSidebar({
       />
 
       <CollapsibleSection title={t("character.skills")} defaultOpen>
+        <div className="skill-row-header" aria-hidden="true">
+          <span>{t("character.skillColName")}</span>
+          <span className="text-right">{t("character.skillColAttribute")}</span>
+          <span className="text-right">{t("character.skillColAdvances")}</span>
+          <span className="text-right">{t("character.skillColTarget")}</span>
+        </div>
         {skillCatalog.map((s) => {
           const advances = ownedAdvances[s.name] ?? 0;
-          const attrValue = character.attributes[s.linked_attribute] ?? 30;
           const target = computeSkillTarget(
             character.attributes,
             s.name,
             skillCatalog,
             character.skills
           );
-          const ariaAdvances = advances > 0 ? `, +${advances} avanços` : "";
           return (
             <button
               key={s.name}
               type="button"
-              className="rollable w-full flex justify-between gap-2 text-xs py-0.5 disabled:opacity-40"
+              className="skill-row rollable w-full text-xs py-0.5 disabled:opacity-40"
               disabled={quickRollDisabled}
-              aria-label={`${s.name}, ${s.linked_attribute} ${attrValue}${ariaAdvances}, alvo ${target}`}
+              aria-label={`${s.name}, ${s.linked_attribute}, ${advances} avanços, alvo ${target}`}
               onClick={() =>
                 setPopover({ type: "skill", key: s.name, label: s.name, target })
               }
             >
-              <span className="truncate min-w-0">{s.name}</span>
-              <span className="skill-row-meta">{formatSkillRowMeta(s.linked_attribute, advances)}</span>
+              <span className="skill-row-name">
+                <TruncatedText>{s.name}</TruncatedText>
+                <span className="skill-row-leader" aria-hidden="true" />
+              </span>
+              <span className="skill-row-attr">{s.linked_attribute}</span>
+              <span className="skill-row-adv">{advances}</span>
+              <span className="skill-row-target">{target}</span>
             </button>
           );
         })}

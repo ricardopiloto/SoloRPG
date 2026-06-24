@@ -73,7 +73,7 @@ declare module "@3d-dice/dice-box" {
       options?: { remove?: boolean; newStartPoint?: boolean }
     ): Promise<RollResultGroup[]>;
     remove(notation: object | object[]): Promise<RollResultGroup[]>;
-    clear(): Promise<void>;
+    clear(): void | Promise<void>;
     hide(className?: string): void;
     show(): void;
     getRollResults(): RollResultGroup[];

@@ -129,6 +129,47 @@ async def test_api_progression_after_xp(client):
 
 
 @pytest.mark.asyncio
+async def test_api_progression_skill_advances_accumulate(client):
+    headers = await auth_headers(client, "progression-multi@example.com")
+    pregen = await client.post(
+        "/api/characters/pregen", json={"template_index": 0}, headers=headers
+    )
+    character = pregen.json()
+
+    from uuid import UUID
+
+    from app.db.database import async_session
+    from app.db.models import PlayerCharacter
+
+    async with async_session() as db:
+        char = await db.get(PlayerCharacter, UUID(character["id"]))
+        char.xp_total = 50
+        await db.commit()
+
+    for _ in range(4):
+        resp = await client.post(
+            f"/api/characters/{character['id']}/progression/skill",
+            json={"skill_name": "Percepção", "linked_attribute": "I"},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+
+    async with async_session() as db:
+        char = await db.get(PlayerCharacter, UUID(character["id"]))
+        perc = next(s for s in char.skills if s["name"] == "Percepção")
+        assert perc["advances"] == 4
+        assert char.xp_spent == 20
+
+    prog = await client.get(
+        f"/api/characters/{character['id']}/progression", headers=headers
+    )
+    assert prog.status_code == 200
+    perc_opt = next(s for s in prog.json()["skills"] if s["name"] == "Percepção")
+    assert perc_opt["current_advances"] == 4
+    assert prog.json()["xp_available"] == 30
+
+
+@pytest.mark.asyncio
 async def test_api_session_pause_resume(client):
     """Sessão pode ser pausada, retomada, e não cria duplicata enquanto pausada."""
     headers = await auth_headers(client, "pause@example.com")

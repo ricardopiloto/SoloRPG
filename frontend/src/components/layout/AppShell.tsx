@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { AudioMuteButton } from "@/components/audio/AudioMuteButton";
 import { t } from "@/lib/i18n";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -35,6 +36,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {user.email}
               </span>
             )}
+            {user && <AudioMuteButton />}
             <button type="button" onClick={handleLogout} className="btn-ghost text-sm py-1.5">
               {t("auth.logout")}
             </button>

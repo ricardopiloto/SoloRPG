@@ -2,6 +2,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.db.models import Campaign, CampaignStatus, CharacterStatus, PlayerCharacter
 from app.rules.careers import (
@@ -10,6 +11,7 @@ from app.rules.careers import (
     SKILL_ADVANCE_COST,
     TALENT_COST,
     apply_skill_advance,
+    skill_advances_by_name,
     xp_available,
 )
 
@@ -105,6 +107,7 @@ async def purchase_skill_advance(
     if xp_available(char.xp_total, char.xp_spent) < SKILL_ADVANCE_COST:
         raise ValueError("XP insuficiente")
     char.skills = apply_skill_advance(char.skills or [], skill_name, linked_attribute)
+    flag_modified(char, "skills")
     char.xp_spent += SKILL_ADVANCE_COST
     await db.commit()
     await db.refresh(char)
@@ -133,7 +136,7 @@ async def get_progression_options(db: AsyncSession, character_id: UUID) -> dict:
     if not char:
         raise ValueError("Personagem não encontrado")
     avail = xp_available(char.xp_total, char.xp_spent)
-    owned_skills = {s.get("name"): s.get("advances", 0) for s in (char.skills or [])}
+    owned_skills = skill_advances_by_name(char.skills)
     owned_talents = {t.get("name") for t in (char.talents or [])}
     return {
         "character_id": str(char.id),

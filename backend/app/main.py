@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 
-app = FastAPI(title="WFRP Solo API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="WFRP Solo API", version="0.3.2", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

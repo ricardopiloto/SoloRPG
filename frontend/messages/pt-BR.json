@@ -9,6 +9,12 @@
     "campaigns": "Campanhas",
     "newCampaign": "Nova campanha"
   },
+  "audio": {
+    "mute": "🔇 Silenciar",
+    "unmute": "🔊 Ativar som",
+    "muteTitle": "Desativar toda a música ambiente",
+    "unmuteTitle": "Reativar música ambiente"
+  },
   "home": {
     "welcome": "Bem-vindo de volta",
     "emptyTitle": "Sua primeira campanha",
@@ -52,6 +58,10 @@
     "xp": "XP",
     "attributes": "Atributos",
     "skills": "Perícias",
+    "skillColName": "Nome",
+    "skillColAttribute": "Atrib.",
+    "skillColAdvances": "Adv.",
+    "skillColTarget": "Alvo",
     "talents": "Talentos",
     "inventory": "Inventário"
   },

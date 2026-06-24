@@ -11,22 +11,96 @@ Versionamento segue o repositório Git — rastreie também as propostas em `ope
 
 Alterações locais ainda **não commitadas**.
 
+---
+
+## [0.3.2] — 2026-06-24
+
+Release de **UX de sessão, áudio ambiente (roteamento + mute), progressão e estabilidade dos dados 3D** em produção.
+
 ### Added
+
+- **add-ambient-audio-engine** — trilha sonora ambiente adaptativa
+  - **Assets:** MP3 em `audio/` (raiz); `npm run prepare:audio` em dev; `COPY audio` no build Docker do frontend
+  - **LLM:** sinal `[MUSICA]{"mood":"tensão"|"normal",...}` no `gm-system-prompt.md` v2.6
+  - **Backend:** parser `MUSICA` em `signals.py`; `TurnResult.scene_mood`; repasse no SSE `done` e `TurnResponse`
+  - **Frontend:** `audioManager.ts` (singleton, loop, volume ambiente baixo — menu 12%, tensão 8%, retry em `NotAllowedError`); `AudioRoutingProvider`; `useSessionPlay` consome `scene_mood`; `stop()` no logout
+  - Proposta OpenSpec: `openspec/changes/archive/2026-06-24-add-ambient-audio-engine/` ✅
+
+- **restrict-menu-audio-out-of-play** — música de menu restrita ao lobby; silêncio em `/play/`
+  - `audioRoutes.ts` com allowlist de rotas; testes `audioRoutes.test.ts` e `audioManager.test.ts`
+  - Mute global via `localStorage` (`wfrp-audio-muted`); hook `useAudioMute()`
+  - Proposta OpenSpec: `openspec/changes/archive/2026-06-24-restrict-menu-audio-out-of-play/` ✅
+
+- **add-global-audio-mute-button** — botão Silenciar/Ativar som em lobby, login e sessão
+  - `AudioMuteButton.tsx` reutilizável em `AppShell`, `/login` e `/play/[sessionId]`
+  - i18n `audio.mute` / `audio.unmute` em `pt-BR.json`
+  - Proposta OpenSpec: `openspec/changes/add-global-audio-mute-button/` — 6/7 tasks (validação manual T7 pendente)
+
+- **add-passive-discovery-tests** — teste passivo de descoberta no prompt GM (TIPO 3 — `obrigatorio: false` para revelar detalhes opcionais)
+  - Proposta OpenSpec: `openspec/changes/archive/2026-06-24-add-passive-discovery-tests/` ✅
+
+- **add-skill-name-truncation-tooltip** — `TruncatedText` com `title` nativo só quando o texto trunca (sidebar de perícias)
+  - Proposta OpenSpec: `openspec/changes/archive/2026-06-24-add-skill-name-truncation-tooltip/` ✅
 
 - **add-wfrp-character-creation-flow** — assistente de criação WFRP4e em etapas (substitui formulário custom livre)
   - **Backend:** `character_creation.py`, catálogo de espécies (`species.py`), carreiras Tier 1 Core (`careers_catalog.json`), perícias básicas (`skills_basic.py`)
   - Endpoints: `GET /rules/character-creation`, `GET /rules/careers`, `POST /characters/validate-creation`, `POST /characters` (somente rascunho validado)
   - Rolagem `2d10+20` ou point-buy (4–18), swap/reroll, XP de criação, derivados (ferimentos, Destino/Fortuna, perícias básicas)
-  - **Background com IA:** `POST /characters/generate-background` + prompt dedicado `Docs/character-background-prompt.md` (mesma LLM, sem prompt de GM)
+  - **Background com IA:** `POST /characters/generate-background` + prompt dedicado `Docs/character-background-prompt.md`
   - **Frontend:** `CharacterCreationWizard` na aba **Criar personagem** em `/character`; i18n `chargen.*`
   - Testes: `test_character_creation.py`, `test_character_background.py`, integração em `test_api_integration.py`
-  - Proposta OpenSpec: `openspec/changes/add-wfrp-character-creation-flow/` — 36/38 tasks (validação manual 4.5/4.6 pendente)
+  - Proposta OpenSpec: `openspec/changes/archive/2026-06-24-add-wfrp-character-creation-flow/` — validação manual 4.5/4.6 pendente
+
+### Changed
+
+- **refine-skill-row-leader-line** — sidebar de perícias em mini-tabela (Nome | Atrib. | Adv. | Alvo) com leader line no nome
+  - Proposta OpenSpec: `openspec/changes/archive/2026-06-24-refine-skill-row-leader-line/` ✅
+
+- **show-skill-target-in-sidebar** — coluna Alvo exibe target numérico em vez do formato `4+[BS]`
+  - Proposta OpenSpec: `openspec/changes/archive/2026-06-24-show-skill-target-in-sidebar/` ✅
+
+- **expand-chat-input-textarea** — input de chat substituído por textarea auto-expansível; Enter envia, Shift+Enter nova linha
+  - Proposta OpenSpec: `openspec/changes/archive/2026-06-24-expand-chat-input-textarea/` ✅
+
+- **remove-quickroll-countdown** — removido countdown de 2s no quick roll; rolagem apenas em "Rolar agora"
+  - Proposta OpenSpec: `openspec/changes/archive/2026-06-24-remove-quickroll-countdown/` ✅
+
+- **enforce-inventory-constraints** — restrições de inventário no prompt GM + guarda heurística no orchestrator (`_check_inventory_reference`)
+  - Testes: `backend/tests/test_inventory_guard.py`
+  - Proposta OpenSpec: `openspec/changes/archive/2026-06-24-enforce-inventory-constraints/` ✅
+
+- **preserve-menu-audio-across-routes** — trilha de menu continua ao navegar entre telas de lobby
+  - `audioManager.play()` idempotente por categoria (`currentCategory`); `AudioRoutingProvider` evita `playMenu()` redundante em menu→menu
+  - Para ao entrar em `/play/`; reinicia só ao sair da sessão ou na primeira rota de lobby
+  - Testes: `audioManager.test.ts` (continuidade menu, troca tensão, stop+replay)
+  - Proposta OpenSpec: `openspec/changes/preserve-menu-audio-across-routes/` — 7/10 tasks (validação manual T8–T10 pendente)
+  - **Nota:** regressões de mute e sobreposição corrigidas em `fix-audio-mute-routing-regression` (abaixo)
 
 ### Fixed
+
+- **fix-dice-production-standalone** — dados 3D em build standalone/Docker
+  - `safeClear()` em `diceBoxHost.ts` (evita `clear().catch is not a function`); testes em `diceBoxHost.test.ts`
+  - Fallback na UI: "Dados físicos indisponíveis — usando resultado numérico"
+  - Headers COOP/COEP em `next.config.js`; smoke check `ammo.wasm.wasm` no Dockerfile; troubleshooting em `Docs/debian-server-install.md`
+  - Proposta OpenSpec: `openspec/changes/fix-dice-production-standalone/` — validação manual em servidor pendente
 
 - **GET /rules/careers** — `ResponseValidationError` ao abrir o assistente (`career_class` vs. alias `class` em `CareerSummaryOut`)
   - `CareerSummaryOut.career_class` com `Field(alias="class")` em `backend/app/schemas/api.py`
   - Teste `test_api_list_careers_returns_class_field` em `test_api_integration.py`
+
+- **fix-progression-skill-advance-count** — contador `atual +N` na tela de progressão
+  - **Causa:** `apply_skill_advance()` mutava o JSON `skills` in-place; SQLAlchemy persistia só a primeira compra (`xp_spent` subia, `advances` ficava em `1`)
+  - **Correção:** update imutável em `careers.py`; `skill_advances_by_name()` na leitura (soma duplicatas legadas); `flag_modified(char, "skills")` em `purchase_skill_advance()`
+  - **UI:** talentos owned exibem `· adquirido` (antes `· possuído`)
+  - Testes: `test_apply_skill_advance_accumulates`, `test_skill_advances_by_name_sums_duplicates`, `test_api_progression_skill_advances_accumulate`
+  - Proposta OpenSpec: `openspec/changes/fix-progression-skill-advance-count/` — 8/10 tasks (validação manual T9–T10 pendente)
+
+- **fix-audio-mute-routing-regression** — Silenciar e instância única de trilha (regressão de `preserve-menu-audio-across-routes`)
+  - **Sintomas:** mute inconsistente fora de `/play/`; faixas sobrepostas ao navegar no lobby; tema reiniciando após silenciar
+  - **Causa:** `play()` assíncrono deixava `<audio>` órfãos audíveis; roteamento usava `muted` stale do React e reiniciava tema após mutar
+  - **Correção:** `playGeneration` + commit pós-`await` só se geração válida; `currentAudio` atribuído após play bem-sucedido; `audioManager.isMuted()` síncrono no provider; `isAudiblyPlaying()` para continuidade menu→menu
+  - Testes: `audioManager mute routing regression` (in-flight mute, play concorrente, no-op quando mutado)
+  - Proposta OpenSpec: `openspec/changes/fix-audio-mute-routing-regression/` — 11/15 tasks (validação manual T12–T15 pendente)
 
 ---
 
@@ -216,10 +290,19 @@ Commit inicial (`de931ad`) — baseline do MVP WFRP Solo entregue no GitHub.
 
 ---
 
-## Status das changes OpenSpec (2026-06-22)
+## Status das changes OpenSpec (2026-06-23)
 
 | Change | Tasks | Status |
 |--------|-------|--------|
+| `add-ambient-audio-engine` | 16/17 | 🟡 Implementado — validação manual T17 pendente |
+| `enforce-inventory-constraints` | 7/10 | 🟡 Implementado — validação manual pendente |
+| `fix-dice-production-standalone` | 8/14 | 🟡 Implementado — validação manual servidor pendente |
+| `expand-chat-input-textarea` | — | ✅ Completo |
+| `remove-quickroll-countdown` | — | ✅ Completo |
+| `show-skill-target-in-sidebar` | — | ✅ Completo |
+| `refine-skill-row-leader-line` | — | ✅ Completo |
+| `add-skill-name-truncation-tooltip` | — | ✅ Completo |
+| `add-passive-discovery-tests` | — | ✅ Completo (prompt) |
 | `phase1-fixed-admin-login` | 7/7 | ✅ Completo |
 | `sqlite-only-database` | — | ✅ Completo |
 | `limit-chargen-to-pregen-phase1` | — | ✅ Completo |
@@ -261,7 +344,8 @@ Changes arquivadas em `openspec/changes/archive/2026-06-17-*/` estão incorporad
 
 ---
 
-[Unreleased]: https://github.com/ricardopiloto/SoloRPG/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/ricardopiloto/SoloRPG/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/ricardopiloto/SoloRPG/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/ricardopiloto/SoloRPG/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/ricardopiloto/SoloRPG/compare/74c6086...v0.3.0
 [0.2.0]: https://github.com/ricardopiloto/SoloRPG/compare/de931ad...74c6086

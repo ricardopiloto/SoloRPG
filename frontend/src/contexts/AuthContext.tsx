@@ -12,6 +12,7 @@ import {
 import { useRouter } from "next/navigation";
 import { api, AuthUser } from "@/lib/api";
 import { clearAuth, getStoredToken, getStoredUser, storeAuth } from "@/lib/auth-storage";
+import { audioManager } from "@/lib/audio/audioManager";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -72,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    audioManager.stop();
     clearAuth();
     setToken(null);
     setUser(null);

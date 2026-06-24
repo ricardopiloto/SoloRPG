@@ -119,6 +119,7 @@ def _turn_response(result, session) -> TurnResponse:
         turn_phase=session.turn_phase if session else "normal",
         pending_test=session.pending_test if session else None,
         combat_state=session.combat_state if session else None,
+        scene_mood=getattr(result, "scene_mood", None),
     )
 
 

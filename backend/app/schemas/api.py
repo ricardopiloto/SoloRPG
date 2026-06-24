@@ -189,6 +189,7 @@ class TurnResponse(BaseModel):
     turn_phase: str = "normal"
     pending_test: dict | None = None
     combat_state: dict | None = None
+    scene_mood: str | None = None
 
 
 class RollRequest(BaseModel):

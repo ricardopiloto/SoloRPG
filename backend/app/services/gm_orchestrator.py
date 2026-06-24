@@ -38,9 +38,84 @@ class TurnResult:
     turn_phase: str = "normal"
     pending_test: dict | None = None
     combat_state: dict | None = None
+    scene_mood: str | None = None
 
 
 from app.rules.skills import SKILL_CATALOG
+
+# Verb stems (≥4 chars) that trigger inventory checking.
+# Using stems covers infinitives and common conjugations (e.g. "sac" → saco/saca/sacar/sacou).
+_INVENTORY_VERB_STEMS = [
+    "sacar", "saco", "saca", "sacou",
+    "usar", "uso", "usa", "usou",
+    "pegar", "pego", "pega", "pegou",
+    "empunhar", "empunho", "empunha", "empunhou",
+    "equipar", "equipo", "equipa", "equipou",
+    "atirar", "atiro", "atira", "atirou",
+    "lancar", "lanco", "lanca", "lancou",
+    "beber", "bebo", "bebe", "bebeu",
+    "aplicar", "aplico", "aplica", "aplicou",
+    "carregar", "carrego", "carrega", "carregou",
+    "erguer", "ergo", "ergue", "ergueu",
+    "tirar", "tiro", "tira", "tirou",
+    "desembainhar", "desembainho", "desembainhou",
+    "empurrar", "empurro", "empurra", "empurrou",
+    "utilizar", "utilizo", "utiliza", "utilizou",
+    "segurar", "seguro", "segura", "segurou",
+]
+
+
+def _normalize(text: str) -> str:
+    import unicodedata
+    nfkd = unicodedata.normalize("NFKD", text.lower())
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
+def _check_inventory_reference(action: str, trappings: list[dict]) -> str | None:
+    """
+    Heuristic check: if the player action contains an inventory-use verb/conjugation
+    followed by tokens that match no trapping name, return a system-note string.
+    Returns None when no absent item is detected or when detection is inconclusive.
+    """
+    norm_action = _normalize(action)
+    action_words = norm_action.split()
+    norm_trapping_names = [_normalize(t.get("name", "")) for t in trappings]
+
+    for i, word in enumerate(action_words):
+        if word not in _INVENTORY_VERB_STEMS:
+            continue
+
+        # Extract the next up to 4 words as item candidate
+        tokens = action_words[i + 1: i + 5]
+        if not tokens:
+            continue
+        candidate = " ".join(tokens)
+
+        # Skip filler/preposition-only candidates
+        fillers = {"minha", "meu", "seu", "sua", "o", "a", "um", "uma", "de", "da", "do", "em", "na", "no"}
+        meaningful = [t for t in tokens if t not in fillers]
+        if not meaningful:
+            continue
+        candidate = " ".join(meaningful)
+
+        # Check whether any trapping name covers the candidate
+        found = any(
+            norm_name and (norm_name in candidate or candidate in norm_name)
+            for norm_name in norm_trapping_names
+            if norm_name
+        )
+        if not found:
+            inventory_list = ", ".join(
+                t.get("name", "") for t in trappings if t.get("name")
+            ) or "(inventário vazio)"
+            item_label = " ".join(meaningful[:3])
+            return (
+                f"[NOTA DO SISTEMA — INVENTÁRIO] O jogador mencionou \"{item_label}\". "
+                f"Este item NÃO consta no inventário do personagem: {inventory_list}. "
+                "Negue o uso narrativamente dentro do universo do jogo sem quebrar personagem."
+            )
+
+    return None
 
 
 class GMOrchestrator:
@@ -86,8 +161,16 @@ class GMOrchestrator:
             "encerrar_sessao": encerrar,
         })
 
+        inventory_note = _check_inventory_reference(
+            player_action, character.trappings or []
+        )
+        action_block = (
+            f"{inventory_note}\n\nAção do jogador: {player_action}"
+            if inventory_note
+            else f"Ação do jogador: {player_action}"
+        )
         messages = [
-            {"role": "user", "content": f"{context_xml}\n\nAção do jogador: {player_action}"},
+            {"role": "user", "content": f"{context_xml}\n\n{action_block}"},
         ]
 
         llm_text = await self.llm.complete(self.system_prompt, messages)
@@ -297,6 +380,7 @@ class GMOrchestrator:
             "turn_phase": session.turn_phase,
             "pending_test": None,
             "combat_state": session.combat_state,
+            "scene_mood": result.scene_mood,
         }
         yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
@@ -396,8 +480,16 @@ class GMOrchestrator:
             "encerrar_sessao": encerrar,
         })
 
+        inventory_note = _check_inventory_reference(
+            player_action, character.trappings or []
+        )
+        action_block = (
+            f"{inventory_note}\n\nAção do jogador: {player_action}"
+            if inventory_note
+            else f"Ação do jogador: {player_action}"
+        )
         messages = [
-            {"role": "user", "content": f"{context_xml}\n\nAção do jogador: {player_action}"},
+            {"role": "user", "content": f"{context_xml}\n\n{action_block}"},
         ]
 
         llm_text_parts: list[str] = []
@@ -449,6 +541,7 @@ class GMOrchestrator:
             "turn_phase": session.turn_phase,
             "pending_test": session.pending_test,
             "combat_state": session.combat_state,
+            "scene_mood": result.scene_mood,
         }
         yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
@@ -511,6 +604,11 @@ class GMOrchestrator:
 
         elif signal.tag == "ESTADO_COMBATE":
             await self._handle_combat_state(db, session, campaign, character, signal.payload, result)
+
+        elif signal.tag == "MUSICA":
+            mood = signal.payload.get("mood")
+            if mood in ("tensão", "normal"):
+                result.scene_mood = mood
 
     async def _handle_combat_state(self, db, session, campaign, character, payload, result):
         action = payload.get("acao", "sincronizar")
