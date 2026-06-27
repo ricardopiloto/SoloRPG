@@ -9,7 +9,60 @@ Versionamento segue o repositório Git — rastreie também as propostas em `ope
 
 ## [Unreleased]
 
-Alterações locais ainda **não commitadas**.
+---
+
+## [0.4.0] — 2026-06-26
+
+Release de **prompt GM (testes + apresentação), trilha expandida, imagens via OpenRouter, devolução na progressão e correções na aba Rolagens**.
+
+### Changed
+
+- **switch-to-openrouter-images** — breaking: substituir `CLOUDFLARE_*` por `OPENROUTER_API_KEY` e `OPENROUTER_IMAGE_MODEL`
+
+### Added
+
+- **add-progression-refund-last-session** — devolução de compras na tela Progressão
+  - Ledger pós-sessão com atribuição FIFO ao XP da última sessão encerrada
+  - `POST /characters/{id}/progression/refund`; janela fecha ao iniciar nova sessão
+  - UI: seção "Compras desta sessão" com botão Devolver
+
+- **switch-to-openrouter-images** — geração de ilustrações via OpenRouter Image API
+  - Novo `openrouter_images.py` (`POST /api/v1/images`, modelo `black-forest-labs/flux.2-klein-4b`)
+  - Removido `cloudflare_workers_ai.py` e variáveis `CLOUDFLARE_*`
+  - Env: `OPENROUTER_API_KEY`, `OPENROUTER_IMAGE_MODEL`
+  - Pipeline async, cache, probe de créditos e guard `images_enabled` preservados
+
+- **fix-wfrp-success-levels** — níveis de sucesso WFRP4e corretos na aba Rolagens
+  - Frontend usa `levels` do backend (não recalcula `floor((target-roll)/10)`)
+  - Plural PT-BR: **nível** / **níveis** (nunca `nívels`)
+  - Testes: `test_rules.py` (32 vs 3 → 3 níveis), `formatSuccessLevels` em `rollHistory.test.ts`
+
+- **fix-roll-history-duplication** — aba Rolagens sem entradas duplicadas
+  - Removido `appendRolls` de `applyMeta` (eco de `/roll/narrate/stream`)
+  - `buildRollHistoryFromTurns()` restaura histórico de `metadata.rolls` e `quick_roll` ao carregar sessão
+  - Testes: `rollHistory.test.ts`
+
+- **add-gm-social-test-triggers** — gatilhos sociais no prompt do GM + perícia Intuição no catálogo
+  - Charme: persuadir / extrair informação (ex.: dona da taverna)
+  - Intuição: jogador pergunta se NPC mente (TIPO 1 contestado vs TIPO 3 passivo)
+  - Backend: `"Intuição": "I"` em `SKILL_CATALOG` e progressão
+
+- **strengthen-gm-test-triggers** — gatilhos obrigatórios de teste no prompt do GM
+  - Perseguição/fuga → Atletismo; infiltração → Furtividade; combate → ataque + Esquivar sequenciais
+  - Seção `GATILHOS OBRIGATÓRIOS DE TESTE` com anti-padrões e exemplos JSON
+  - `MODO: COMBATE` reforçado: proíbe narrar acerto/ferimento sem rolagem
+
+- **defer-gm-narrative-presentation** — narrativa GM só aparece após turno completo; indicador "Preparando a resposta…"
+  - Frontend deixa de renderizar tokens SSE brutos (`[MUSICA]`, `[NOVA_CAMPANHA]`, JSON de teste)
+  - Backend: `strip_signal_artifacts()` + parser tolerante a typo `[/NOVA_CAMAPANHA]`
+  - Testes: `test_signals.py`, `streamNarrative.test.ts`
+
+- **expand-audio-mood-vocabulary** — 8 moods in-game via `[MUSICA]` (`combate`, `exploração`, `investigação`, `horror`, `horror_caos`, `social`, `jornada` + `tensão`/`normal`)
+  - **Assets:** 16 MP3 in-game em `audio/` (incl. Horror ×2 sobrenatural + Horror Chaos ×2)
+  - **Horror:** `horror` → pool `Horror` + `Horror 2`; `horror_caos` → pool `Horror Chaos` + `Horror Chaos 2`
+  - **Frontend:** `audioMoods.ts`, `AudioCategory` estendida, volumes 6–9%
+  - **Backend:** `IN_GAME_MOODS` em `audio_moods.py`
+  - **Docs:** `gm-system-prompt.md`, `audio-engine.md`
 
 ---
 

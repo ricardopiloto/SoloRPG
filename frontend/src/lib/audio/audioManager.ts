@@ -1,16 +1,50 @@
 import { isInGameRoute } from "./audioRoutes";
 
-export type AudioCategory = "menu" | "tensao";
+export type AudioCategory =
+  | "menu"
+  | "tensao"
+  | "combate"
+  | "exploracao"
+  | "investigacao"
+  | "horror"
+  | "horror_caos"
+  | "social"
+  | "jornada";
+
+const IN_GAME_CATEGORIES = new Set<AudioCategory>([
+  "tensao",
+  "combate",
+  "exploracao",
+  "investigacao",
+  "horror",
+  "horror_caos",
+  "social",
+  "jornada",
+]);
 
 const TRACKS: Record<AudioCategory, string[]> = {
   menu: ["/audio/Solo RPG Theme.mp3", "/audio/Solo RPG Theme 2.mp3"],
   tensao: ["/audio/Solo RPG - Tension.mp3", "/audio/Solo RPG - Tension 2.mp3"],
+  combate: ["/audio/SoloRPG - Combat.mp3", "/audio/SoloRPG - Combat 2.mp3"],
+  exploracao: ["/audio/SoloRPG - Exploration.mp3", "/audio/SoloRPG - Exploration 2.mp3"],
+  investigacao: ["/audio/SoloRPG - Investigation.mp3", "/audio/SoloRPG - Investigation 2.mp3"],
+  horror: ["/audio/SoloRPG - Horror.mp3", "/audio/SoloRPG - Horror 2.mp3"],
+  horror_caos: ["/audio/SoloRPG - Horror Chaos.mp3", "/audio/SoloRPG - Horror Chaos 2.mp3"],
+  social: ["/audio/SoloRPG - Social.mp3", "/audio/SoloRPG - Social 2.mp3"],
+  jornada: ["/audio/SoloRPG - Journey.mp3", "/audio/SoloRPG - Journey 2.mp3"],
 };
 
 /** Ambient levels — background only, not foreground music. */
 const VOLUME: Record<AudioCategory, number> = {
   menu: 0.12,
   tensao: 0.08,
+  combate: 0.09,
+  exploracao: 0.07,
+  investigacao: 0.06,
+  horror: 0.07,
+  horror_caos: 0.07,
+  social: 0.06,
+  jornada: 0.06,
 };
 
 const MUTE_STORAGE_KEY = "wfrp-audio-muted";
@@ -97,6 +131,10 @@ export const audioManager = {
     return isPlaying();
   },
 
+  getCurrentCategory(): AudioCategory | null {
+    return currentCategory;
+  },
+
   setMuted(value: boolean): void {
     ensureMutedLoaded();
     muted = value;
@@ -118,7 +156,10 @@ export const audioManager = {
     if (typeof window === "undefined") return;
     ensureMutedLoaded();
     if (muted) return;
-    if (category === "menu" && isInGameRoute(window.location.pathname)) return;
+
+    const path = window.location.pathname;
+    if (category === "menu" && isInGameRoute(path)) return;
+    if (IN_GAME_CATEGORIES.has(category) && !isInGameRoute(path)) return;
 
     if (currentCategory === category && isPlaying()) {
       return;
@@ -140,6 +181,10 @@ export const audioManager = {
         return;
       }
       if (category === "menu" && isInGameRoute(window.location.pathname)) {
+        disposeAudio(audio);
+        return;
+      }
+      if (IN_GAME_CATEGORIES.has(category) && !isInGameRoute(window.location.pathname)) {
         disposeAudio(audio);
         return;
       }

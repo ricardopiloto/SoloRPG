@@ -13,9 +13,8 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
     llm_model: str = "deepseek-chat"
-    cloudflare_account_id: str = ""
-    cloudflare_api_token: str = ""
-    cloudflare_ai_model: str = "@cf/black-forest-labs/flux-1-schnell"
+    openrouter_api_key: str = ""
+    openrouter_image_model: str = "black-forest-labs/flux.2-klein-4b"
     api_base_url: str = "http://localhost:8000"
     cors_origins: str = "http://localhost:3000"
     session_turn_history_limit: int = 20

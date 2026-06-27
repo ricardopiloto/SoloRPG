@@ -12,7 +12,7 @@ Aplicação web de **RPG solo** baseada em **Warhammer Fantasy Roleplay 4ª edi�
 |-----|-----------|
 | **Jogar solo** | Campanhas WFRP4e sem grupo ou GM humano |
 | **Sessões pausáveis** | Timer visível; retome de onde parou |
-| **Trilha ambiente** | Menu só no lobby (~12% volume), tensão in-game via `[MUSICA]` (~8%); trilha **não reinicia** ao trocar telas de lobby; botão **Silenciar** global (persiste entre rotas); uma faixa audível por vez |
+| **Trilha ambiente** | Menu só no lobby (~12%); 8 moods in-game via `[MUSICA]` (tensão, combate, exploração, investigação, horror, horror_caos, social, jornada); volumes 6–9%; ver [`Docs/audio-engine.md`](Docs/audio-engine.md) |
 | **Progressão real** | XP, perícias e talentos entre sessões; contador de avanços persistido corretamente no backend |
 | **Teste controlado** | Contas isoladas por usuário; fase 1 com pré-gerados + starter automático |
 
@@ -28,7 +28,7 @@ Aplicação web de **RPG solo** baseada em **Warhammer Fantasy Roleplay 4ª edi�
 | Backend | Python 3, FastAPI, SQLAlchemy (async) |
 | Banco | SQLite (arquivo `wfrp_solo.db`) |
 | LLM | DeepSeek (`deepseek-chat`) — adapter mock / Anthropic |
-| Imagens | Cloudflare Workers AI (FLUX.1 Schnell), fila assíncrona |
+| Imagens | OpenRouter Image API (FLUX.2 Klein 4B), fila assíncrona |
 | Auth | JWT; fase 1: conta fixa `admin` + `ADMIN_PASSWORD` |
 | Deploy | Vercel + Railway (PaaS) ou VPS Debian ([guia](Docs/debian-server-install.md)) |
 
@@ -65,7 +65,7 @@ flowchart LR
 
     subgraph Serviços
         LLM[DeepSeek]
-        IMG[Cloudflare AI]
+        IMG[OpenRouter Images]
     end
 
     DB[(SQLite wfrp_solo.db)]
@@ -186,6 +186,20 @@ O SQLite fica em `WFRP_DATA_DIR` (padrão `./data` no host).
 
 ## Changelog (últimas versões)
 
+### [Unreleased]
+
+_Nenhuma alteração pendente de release._
+
+### [0.4.0] — 2026-06-26
+
+- **Imagens** — migração para OpenRouter (`OPENROUTER_API_KEY`; breaking: remover `CLOUDFLARE_*`)
+- **Progressão** — devolver compras feitas com XP da última sessão (botão Devolver)
+- **GM** — narrativa só após turno completo; gatilhos de teste (combate, fuga, furtividade, social)
+- **Áudio** — 8 moods in-game; horror sobrenatural vs horror do Caos (pools separados)
+- **Rolagens** — histórico sem duplicatas; níveis de sucesso WFRP corretos (`nível` / `níveis`)
+
+Ver histórico completo: [`CHANGELOG.md`](CHANGELOG.md)
+
 ### [0.3.2] — 2026-06-24
 
 - **Trilha sonora ambiente** — menu no lobby (12% volume); tensão in-game via `[MUSICA]` (8%); roteamento por rota; botão Silenciar global
@@ -216,7 +230,7 @@ Ver histórico completo: [`CHANGELOG.md`](CHANGELOG.md)
 
 - Mecânicas de **Destino e Fortuna** (regras completas + UI)
 - **Dados 3D** (DiceBox) com init robusto
-- **Guarda de créditos** Cloudflare para imagens de sessão
+- **Guarda de créditos** OpenRouter para imagens de sessão
 - **Roster de NPCs** no diário lateral
 - Formato WFRP `4+[Fel]` na sidebar de perícias
 

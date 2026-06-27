@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { CampaignNpc, RollHistoryEntry } from "@/lib/api";
+import { formatSuccessLevels } from "@/lib/session/rollHistory";
 import { t } from "@/lib/i18n";
 
 export function DiarySidebar({
@@ -100,9 +101,7 @@ function NpcEntry({ npc }: { npc: CampaignNpc }) {
 function RollEntry({ entry }: { entry: RollHistoryEntry }) {
   const successColor = entry.success ? "text-green-400" : "text-red-400";
   const successLabel = entry.success ? "Sucesso" : "Falha";
-  const levelLabel = entry.levels > 0
-    ? `(${entry.levels} nível${entry.levels > 1 ? "s" : ""})`
-    : "";
+  const levelLabel = formatSuccessLevels(entry.levels);
 
   return (
     <article className="border-b border-wfrp-border/40 pb-2 last:border-0">

@@ -25,6 +25,36 @@ def test_resolve_test_success():
     assert isinstance(result.success, bool)
 
 
+def test_success_levels_target_32_roll_3():
+    result = resolve_test(32, roll=3)
+    assert result.target == 32
+    assert result.success is True
+    assert result.levels == 3
+
+
+def test_success_levels_marginal_one_level():
+    result = resolve_test(40, roll=34)
+    assert result.success is True
+    assert result.levels == 1
+
+
+def test_failure_levels_with_margin():
+    result = resolve_test(30, roll=45)
+    assert result.success is False
+    assert result.levels == 1 + (45 - 30) // 10
+
+
+def test_to_llm_text_plural_levels():
+    result = resolve_test(32, roll=3, description="teste")
+    assert "3 níveis" in result.to_llm_text("Percepção")
+    assert "nível(is)" not in result.to_llm_text("Percepção")
+
+    marginal = resolve_test(40, roll=34, description="teste")
+    text = marginal.to_llm_text("Agilidade")
+    assert "1 nível" in text
+    assert "1 níveis" not in text
+
+
 def test_melee_attack_structure():
     attack = resolve_melee_attack(40, 30, 4, 0, 2, "personagem", "inimigo", "Espada")
     assert attack.attacker == "personagem"

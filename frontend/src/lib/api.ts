@@ -71,6 +71,19 @@ export type CampaignNpc = {
 export type ProgressionOptions = {
   character_id: string;
   xp_available: number;
+  progression_window_active: boolean;
+  refund_budget_remaining: number;
+  refund_budget_total: number;
+  refundable_purchases: Array<{
+    id: string;
+    type: "skill" | "talent";
+    skill_name?: string | null;
+    linked_attribute?: string | null;
+    talent_name?: string | null;
+    cost: number;
+    refundable_xp: number;
+    refunded: boolean;
+  }>;
   skills: Array<{
     name: string;
     linked_attribute: string;
@@ -124,6 +137,7 @@ export type TurnResponse = {
     roll?: number;
     target?: number;
     success?: boolean;
+    levels?: number;
     damage?: number;
     llm_text?: string;
     skill?: string;
@@ -385,6 +399,11 @@ export const api = {
     authRequest<Character>(`/characters/${characterId}/progression/talent`, {
       method: "POST",
       body: JSON.stringify({ talent_name }),
+    }),
+  refundPurchase: (characterId: string, purchase_id: string) =>
+    authRequest<Character>(`/characters/${characterId}/progression/refund`, {
+      method: "POST",
+      body: JSON.stringify({ purchase_id }),
     }),
   getSession: (sessionId: string) => authRequest<SessionDetail>(`/sessions/${sessionId}`),
   pauseSession: (sessionId: string) =>

@@ -26,6 +26,7 @@ RUN npm run prepare:dice \
     && test -f public/assets/dice-box/assets/ammo/ammo.wasm.wasm \
     || (echo "ERROR: ammo.wasm.wasm missing after prepare:dice" && exit 1)
 RUN test -f "public/audio/Solo RPG Theme.mp3" \
+    && test -f "public/audio/SoloRPG - Combat.mp3" \
     || (echo "ERROR: audio assets missing — ensure audio/ exists at project root" && exit 1)
 RUN npm run build
 

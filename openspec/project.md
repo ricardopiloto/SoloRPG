@@ -11,7 +11,7 @@ WFRP Solo is a web application for solo tabletop RPG play where an LLM acts as a
 - **Database:** SQLite (`aiosqlite`) — single file `wfrp_solo.db`
 - **Semantic memory:** JSON embeddings + Python cosine search (`PythonSearchAdapter`)
 - **LLM:** DeepSeek (`deepseek-chat`) default; adapter suporta mock / Claude
-- **Image generation:** Cloudflare Workers AI (`flux-1-schnell`, async background queue)
+- **Image generation:** OpenRouter Image API (`black-forest-labs/flux.2-klein-4b`, async background queue)
 - **Deploy:** Vercel (frontend), Railway/Fly.io or VPS Debian (backend + SQLite file)
 
 ## Project Conventions
@@ -58,7 +58,7 @@ WFRP Solo is a web application for solo tabletop RPG play where an LLM acts as a
 ## External Dependencies
 
 - LLM API (Anthropic Claude / DeepSeek) — model-agnostic adapter required
-- Cloudflare Workers AI API — async image generation (FLUX.1 Schnell)
+- OpenRouter Image API — async image generation (FLUX.2 Klein 4B)
 - SMTP — email verification in production
 - Vercel — frontend hosting (optional)
 

@@ -137,6 +137,21 @@ class ProgressionOptionsOut(BaseModel):
     xp_available: int
     skills: list[dict]
     talents: list[dict]
+    progression_window_active: bool = False
+    refund_budget_remaining: int = 0
+    refund_budget_total: int = 0
+    refundable_purchases: list["ProgressionPurchaseOut"] = Field(default_factory=list)
+
+
+class ProgressionPurchaseOut(BaseModel):
+    id: UUID
+    type: str
+    skill_name: str | None = None
+    linked_attribute: str | None = None
+    talent_name: str | None = None
+    cost: int
+    refundable_xp: int
+    refunded: bool = False
 
 
 class CampaignCreate(BaseModel):
@@ -213,6 +228,10 @@ class ProgressionSkill(BaseModel):
 
 class ProgressionTalent(BaseModel):
     talent_name: str
+
+
+class ProgressionRefundIn(BaseModel):
+    purchase_id: UUID
 
 
 class QuickRollRequest(BaseModel):

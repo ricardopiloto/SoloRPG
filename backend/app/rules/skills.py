@@ -13,6 +13,7 @@ SKILL_CATALOG: dict[str, str] = {
     "Esquivar": "Ag",
     "Furtividade": "Ag",
     "Intimidação": "S",
+    "Intuição": "I",
     "Liderança": "Fel",
     "Luta": "WS",
     "Natação": "S",
@@ -31,6 +32,7 @@ PROGRESSION_SKILL_NAMES = [
     "Conhecimento (Reikland)",
     "Intimidação",
     "Charme",
+    "Intuição",
     "Vontade",
     "Escalar",
 ]

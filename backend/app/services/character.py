@@ -1,3 +1,5 @@
+import uuid
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
@@ -11,6 +13,8 @@ from app.rules.careers import (
     SKILL_ADVANCE_COST,
     TALENT_COST,
     apply_skill_advance,
+    reverse_skill_advance,
+    reverse_talent,
     skill_advances_by_name,
     xp_available,
 )
@@ -39,6 +43,44 @@ PRE_GENERATED_CHARACTERS = [
         "trappings": [{"name": "Grimório", "encumbrance": 1, "description": "Páginas amareladas"}],
     },
 ]
+
+
+def _record_progression_purchase(char: PlayerCharacter, purchase_type: str, cost: int, **fields) -> None:
+    if not char.progression_source_session_id:
+        return
+    budget = char.progression_refund_budget or 0
+    refundable = min(cost, budget)
+    char.progression_refund_budget = budget - refundable
+    purchases = list(char.progression_purchases or [])
+    purchases.append(
+        {
+            "id": str(uuid.uuid4()),
+            "type": purchase_type,
+            "cost": cost,
+            "refundable_xp": refundable,
+            "refunded": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            **fields,
+        }
+    )
+    char.progression_purchases = purchases
+    flag_modified(char, "progression_purchases")
+
+
+def close_progression_refund_window(char: PlayerCharacter) -> None:
+    char.progression_source_session_id = None
+    char.progression_refund_budget = 0
+    char.progression_purchases = []
+    flag_modified(char, "progression_purchases")
+
+
+def open_progression_refund_window(
+    char: PlayerCharacter, session_id: UUID, xp_awarded: int
+) -> None:
+    char.progression_source_session_id = session_id
+    char.progression_refund_budget = xp_awarded
+    char.progression_purchases = []
+    flag_modified(char, "progression_purchases")
 
 
 async def create_character(
@@ -109,6 +151,14 @@ async def purchase_skill_advance(
     char.skills = apply_skill_advance(char.skills or [], skill_name, linked_attribute)
     flag_modified(char, "skills")
     char.xp_spent += SKILL_ADVANCE_COST
+    _record_progression_purchase(
+        char,
+        "skill",
+        SKILL_ADVANCE_COST,
+        skill_name=skill_name,
+        linked_attribute=linked_attribute,
+        talent_name=None,
+    )
     await db.commit()
     await db.refresh(char)
     return char
@@ -125,10 +175,66 @@ async def purchase_talent(db: AsyncSession, character_id: UUID, talent_name: str
     talents = list(char.talents or [])
     talents.append({"name": talent_name})
     char.talents = talents
+    flag_modified(char, "talents")
     char.xp_spent += TALENT_COST
+    _record_progression_purchase(
+        char,
+        "talent",
+        TALENT_COST,
+        skill_name=None,
+        linked_attribute=None,
+        talent_name=talent_name,
+    )
     await db.commit()
     await db.refresh(char)
     return char
+
+
+async def refund_progression_purchase(
+    db: AsyncSession, character_id: UUID, purchase_id: UUID
+) -> PlayerCharacter:
+    char = await get_character(db, character_id)
+    if not char or char.status != CharacterStatus.ALIVE:
+        raise ValueError("Personagem inválido")
+    if not char.progression_source_session_id:
+        raise ValueError("Janela de devolução encerrada")
+
+    purchases = list(char.progression_purchases or [])
+    entry = next((p for p in purchases if p.get("id") == str(purchase_id)), None)
+    if not entry or entry.get("refunded"):
+        raise ValueError("Compra não encontrada ou já devolvida")
+    if entry.get("refundable_xp", 0) <= 0:
+        raise ValueError("Compra não reembolsável")
+
+    purchase_type = entry.get("type")
+    if purchase_type == "skill":
+        char.skills = reverse_skill_advance(char.skills or [], entry["skill_name"])
+        flag_modified(char, "skills")
+    elif purchase_type == "talent":
+        char.talents = reverse_talent(char.talents or [], entry["talent_name"])
+        flag_modified(char, "talents")
+    else:
+        raise ValueError("Tipo de compra inválido")
+
+    refundable = entry["refundable_xp"]
+    char.xp_spent -= entry["cost"]
+    char.progression_refund_budget = (char.progression_refund_budget or 0) + refundable
+    entry["refunded"] = True
+    char.progression_purchases = purchases
+    flag_modified(char, "progression_purchases")
+    await db.commit()
+    await db.refresh(char)
+    return char
+
+
+def _refund_budget_total(char: PlayerCharacter) -> int:
+    budget = char.progression_refund_budget or 0
+    attributed = sum(
+        p.get("refundable_xp", 0)
+        for p in (char.progression_purchases or [])
+        if not p.get("refunded")
+    )
+    return budget + attributed
 
 
 async def get_progression_options(db: AsyncSession, character_id: UUID) -> dict:
@@ -138,9 +244,29 @@ async def get_progression_options(db: AsyncSession, character_id: UUID) -> dict:
     avail = xp_available(char.xp_total, char.xp_spent)
     owned_skills = skill_advances_by_name(char.skills)
     owned_talents = {t.get("name") for t in (char.talents or [])}
+    window_active = char.progression_source_session_id is not None
+    purchases = char.progression_purchases or []
+    refundable_purchases = [
+        {
+            "id": p["id"],
+            "type": p["type"],
+            "skill_name": p.get("skill_name"),
+            "linked_attribute": p.get("linked_attribute"),
+            "talent_name": p.get("talent_name"),
+            "cost": p["cost"],
+            "refundable_xp": p.get("refundable_xp", 0),
+            "refunded": p.get("refunded", False),
+        }
+        for p in purchases
+        if not p.get("refunded") and p.get("refundable_xp", 0) > 0
+    ]
     return {
         "character_id": str(char.id),
         "xp_available": avail,
+        "progression_window_active": window_active,
+        "refund_budget_remaining": char.progression_refund_budget or 0,
+        "refund_budget_total": _refund_budget_total(char) if window_active else 0,
+        "refundable_purchases": refundable_purchases,
         "skills": [
             {
                 "name": s["name"],

@@ -48,7 +48,7 @@ Contas/chaves necessárias:
 - Chave **DeepSeek** (`DEEPSEEK_API_KEY`)
 - **ADMIN_PASSWORD** (fase 1 — login fixo; mín. 8 caracteres)
 - Servidor **SMTP** (somente se `AUTH_MODE=multi_user`)
-- (Opcional) **Cloudflare Workers AI** para ilustrações
+- (Opcional) **OpenRouter** (`OPENROUTER_API_KEY`) para ilustrações via FLUX.2 Klein 4B
 
 ---
 
@@ -407,7 +407,7 @@ docker compose up -d --build
 | Tunnel não roteia / 502 | `sudo systemctl status cloudflared`; verificar entradas no `config.yml` |
 | Tunnel: host não reconhecido | Confirmar CNAME no painel Cloudflare com proxy ativo (laranja) |
 | 403 em wizard de personagem | Esperado — `ENABLE_CUSTOM_CHARGEN=false` na fase 1 |
-| Imagens não carregam | Configurar `CLOUDFLARE_*` ou aceitar placeholder |
+| Imagens não carregam | Configurar `OPENROUTER_API_KEY`; nova sessão executa probe — sem chave, imagens ficam desabilitadas |
 
 ### Dados 3D não aparecem (erros `colliderFaceMap` no console)
 

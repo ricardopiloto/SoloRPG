@@ -48,6 +48,9 @@ data/*.db-*
 # AI Agents — transcripts, session state, project-local configs
 .claude/
 .cursor/
+.kiro/
+
+.trash/
 
 # Obsidian — workspace state and personal layout (not vault content)
 .obsidian/

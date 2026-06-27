@@ -10,14 +10,14 @@ os.environ["LLM_PROVIDER"] = "mock"
 from app.db.database import async_session, engine
 from app.db.models import Base, Campaign, CampaignStatus, GameSession, ImageJob, PlayerCharacter
 from app.llm.signals import ParsedSignal
-from app.services.cloudflare_workers_ai import (
-    CloudflareGenerationError,
-    CloudflareNotConfigured,
+from app.services.gm_orchestrator import GMOrchestrator, TurnResult
+from app.services.images import process_image_job
+from app.services.openrouter_images import (
+    OpenRouterGenerationError,
+    OpenRouterNotConfigured,
     is_quota_or_credit_error,
     probe_image_credits,
 )
-from app.services.gm_orchestrator import GMOrchestrator, TurnResult
-from app.services.images import process_image_job
 from app.services.session import start_session
 
 
@@ -43,10 +43,17 @@ async def _seed_campaign(db):
 
 
 def test_is_quota_or_credit_error_classifies_quota_cases():
-    assert is_quota_or_credit_error(CloudflareNotConfigured("missing"))
-    assert is_quota_or_credit_error(CloudflareGenerationError("Cloudflare quota/tokens esgotados (HTTP 429)"))
-    assert is_quota_or_credit_error(CloudflareGenerationError("Cloudflare API error: [{'code': 10000}]"))
-    assert not is_quota_or_credit_error(CloudflareGenerationError("Cloudflare HTTP 503"))
+    assert is_quota_or_credit_error(OpenRouterNotConfigured("missing"))
+    assert is_quota_or_credit_error(
+        OpenRouterGenerationError("OpenRouter quota/rate limit (HTTP 429)"
+    ))
+    assert is_quota_or_credit_error(
+        OpenRouterGenerationError("OpenRouter payment required / credits insufficient (HTTP 402)")
+    )
+    assert is_quota_or_credit_error(
+        OpenRouterGenerationError("OpenRouter response missing image data: insufficient credits")
+    )
+    assert not is_quota_or_credit_error(OpenRouterGenerationError("OpenRouter HTTP 503"))
     assert not is_quota_or_credit_error(TimeoutError("timeout"))
 
 
@@ -167,10 +174,10 @@ async def test_quota_mid_session_disables_session_images():
         mock_client = AsyncMock()
         mock_client.enabled = True
         mock_client.generate_image = AsyncMock(
-            side_effect=CloudflareGenerationError("Cloudflare quota/tokens esgotados (HTTP 429)")
+            side_effect=OpenRouterGenerationError("OpenRouter quota/rate limit (HTTP 429)")
         )
 
-        with patch("app.services.images.CloudflareWorkersAIClient", return_value=mock_client):
+        with patch("app.services.images.OpenRouterImagesClient", return_value=mock_client):
             await process_image_job(db, job.id)
 
         await db.refresh(session)
@@ -199,10 +206,10 @@ async def test_transient_error_does_not_disable_session_images():
         mock_client = AsyncMock()
         mock_client.enabled = True
         mock_client.generate_image = AsyncMock(
-            side_effect=CloudflareGenerationError("Cloudflare HTTP 503")
+            side_effect=OpenRouterGenerationError("OpenRouter HTTP 503")
         )
 
-        with patch("app.services.images.CloudflareWorkersAIClient", return_value=mock_client):
+        with patch("app.services.images.OpenRouterImagesClient", return_value=mock_client):
             await process_image_job(db, job.id)
 
         await db.refresh(session)

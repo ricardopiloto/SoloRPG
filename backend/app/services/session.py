@@ -8,7 +8,8 @@ from sqlalchemy.orm import selectinload
 from app.db.models import Campaign, CampaignStatus, GameSession, PlayerCharacter, SessionMode, SessionTurn
 from app.rules.careers import validate_xp
 from app.rules.fate import refresh_fortune_from_fate
-from app.services.cloudflare_workers_ai import probe_image_credits
+from app.services.character import close_progression_refund_window, open_progression_refund_window
+from app.services.openrouter_images import probe_image_credits
 
 
 async def pause_session(db: AsyncSession, session: GameSession) -> GameSession:
@@ -79,6 +80,7 @@ async def start_session(
         character.fortune_current, character.fortune_max = refresh_fortune_from_fate(
             character.fate_current
         )
+        close_progression_refund_window(character)
 
     await db.commit()
     await db.refresh(session)
@@ -163,5 +165,7 @@ async def end_session(db: AsyncSession, session: GameSession, xp: int = 0) -> No
     session.xp_awarded = validate_xp(xp)
     campaign = await db.scalar(select(Campaign).where(Campaign.id == session.campaign_id))
     if campaign and campaign.character:
-        campaign.character.xp_total += session.xp_awarded
+        char = campaign.character
+        char.xp_total += session.xp_awarded
+        open_progression_refund_window(char, session.id, session.xp_awarded)
     await db.commit()

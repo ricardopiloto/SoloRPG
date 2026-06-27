@@ -9,6 +9,7 @@ from app.db.models import Campaign, CharacterStatus, GameSession, MapRegion
 from app.llm.adapter import get_llm_adapter
 from app.llm.prompts import load_gm_system_prompt
 from app.llm.signals import ParsedSignal, parse_signals
+from app.services.audio_moods import IN_GAME_MOODS
 from app.rules.careers import validate_xp
 from app.rules.criticals import apply_wounds, resolve_critical
 from app.rules.fate import spend_fate_point, spend_fortune_point
@@ -315,7 +316,7 @@ class GMOrchestrator:
             result.signals_processed.append(signal.tag)
             await self._handle_signal(db, session, campaign, character, signal, result)
 
-        result.narrative = parsed.narrative or narrative
+        result.narrative = parsed.narrative
         session.pending_roll_result = None
         session.turn_phase = "normal"
         await append_turn(db, session, "gm", result.narrative, {"rolls": result.roll_results})
@@ -360,7 +361,7 @@ class GMOrchestrator:
             result.signals_processed.append(signal.tag)
             await self._handle_signal(db, session, campaign, character, signal, result)
 
-        narrative = parsed.narrative or llm_text
+        narrative = parsed.narrative
         result.narrative = narrative
         session.pending_roll_result = None
         session.turn_phase = "normal"
@@ -607,7 +608,7 @@ class GMOrchestrator:
 
         elif signal.tag == "MUSICA":
             mood = signal.payload.get("mood")
-            if mood in ("tensão", "normal"):
+            if mood in IN_GAME_MOODS:
                 result.scene_mood = mood
 
     async def _handle_combat_state(self, db, session, campaign, character, payload, result):

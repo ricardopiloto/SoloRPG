@@ -1,13 +1,13 @@
 import base64
 import os
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from sqlalchemy import select
 
-os.environ.setdefault("CLOUDFLARE_ACCOUNT_ID", "test-account")
-os.environ.setdefault("CLOUDFLARE_API_TOKEN", "test-token")
+os.environ.setdefault("OPENROUTER_API_KEY", "test-openrouter-key")
 os.environ.setdefault("API_BASE_URL", "http://testserver")
 
 from app.db.database import async_session, engine
@@ -65,7 +65,7 @@ async def test_queue_image_creates_pending_job(noop_schedule):
         campaign, _ = await _seed_campaign(db)
         job = await queue_image(db, campaign.id, None, "cena", "Uma taverna escura em Altdorf")
         assert job.status == "pending"
-        assert job.image_url == placeholder_url("cena")
+        assert job.image_url is None
         assert job.cache_key == build_cache_key("cena", "Uma taverna escura em Altdorf")
 
 
@@ -84,7 +84,7 @@ async def test_queue_image_uses_cache(noop_schedule):
 
 
 @pytest.mark.asyncio
-async def test_process_image_job_with_mock_cloudflare(tmp_path):
+async def test_process_image_job_with_mock_openrouter(tmp_path):
     async with async_session() as db:
         campaign, _ = await _seed_campaign(db)
         job = ImageJob(
@@ -103,7 +103,7 @@ async def test_process_image_job_with_mock_cloudflare(tmp_path):
         mock_client.enabled = True
         mock_client.generate_image = AsyncMock(return_value=FAKE_JPEG)
 
-        with patch("app.services.images.CloudflareWorkersAIClient", return_value=mock_client):
+        with patch("app.services.images.OpenRouterImagesClient", return_value=mock_client):
             await process_image_job(db, job.id)
 
         updated = await get_image_job(db, job.id)
@@ -141,7 +141,7 @@ async def test_process_image_job_updates_map_region():
         mock_client.enabled = True
         mock_client.generate_image = AsyncMock(return_value=FAKE_JPEG)
 
-        with patch("app.services.images.CloudflareWorkersAIClient", return_value=mock_client):
+        with patch("app.services.images.OpenRouterImagesClient", return_value=mock_client):
             await process_image_job(db, job.id)
 
         updated_region = await db.scalar(select(MapRegion).where(MapRegion.id == region.id))
@@ -168,7 +168,7 @@ async def test_process_image_job_links_item_to_inventory():
         mock_client.enabled = True
         mock_client.generate_image = AsyncMock(return_value=FAKE_JPEG)
 
-        with patch("app.services.images.CloudflareWorkersAIClient", return_value=mock_client):
+        with patch("app.services.images.OpenRouterImagesClient", return_value=mock_client):
             await process_image_job(db, job.id)
 
         await db.refresh(character)
@@ -176,7 +176,7 @@ async def test_process_image_job_links_item_to_inventory():
 
 
 @pytest.mark.asyncio
-async def test_process_image_job_fallback_without_credentials():
+async def test_process_image_job_fails_without_credentials():
     async with async_session() as db:
         campaign, _ = await _seed_campaign(db)
         job = ImageJob(
@@ -194,12 +194,12 @@ async def test_process_image_job_fallback_without_credentials():
         mock_client = AsyncMock()
         mock_client.enabled = False
 
-        with patch("app.services.images.CloudflareWorkersAIClient", return_value=mock_client):
+        with patch("app.services.images.OpenRouterImagesClient", return_value=mock_client):
             await process_image_job(db, job.id)
 
         updated = await get_image_job(db, job.id)
-        assert updated.status == "completed"
-        assert updated.image_url == placeholder_url("cena")
+        assert updated.status == "failed"
+        assert updated.image_url is None
 
 
 @pytest.mark.asyncio
@@ -230,25 +230,68 @@ async def test_api_image_file_serves_jpeg(client, noop_schedule):
 
 
 @pytest.mark.asyncio
-async def test_cloudflare_client_decodes_base64():
-    from app.services.cloudflare_workers_ai import CloudflareWorkersAIClient
+async def test_openrouter_client_decodes_base64():
+    from app.services.openrouter_images import OpenRouterImagesClient
 
     payload = base64.b64encode(FAKE_JPEG).decode()
 
     mock_response = AsyncMock()
     mock_response.raise_for_status = lambda: None
-    mock_response.json = lambda: {"success": True, "result": {"image": payload}}
+    mock_response.json = lambda: {"data": [{"b64_json": payload}]}
 
     mock_http = AsyncMock()
     mock_http.post = AsyncMock(return_value=mock_response)
     mock_http.__aenter__ = AsyncMock(return_value=mock_http)
     mock_http.__aexit__ = AsyncMock(return_value=None)
 
-    client = CloudflareWorkersAIClient(
-        account_id="acct",
-        api_token="token",
-        model="@cf/black-forest-labs/flux-1-schnell",
-    )
-    with patch("app.services.cloudflare_workers_ai.httpx.AsyncClient", return_value=mock_http):
+    client = OpenRouterImagesClient(api_key="or-key", model="black-forest-labs/flux.2-klein-4b")
+    with patch("app.services.openrouter_images.httpx.AsyncClient", return_value=mock_http):
         result = await client.generate_image("A grim tavern", "cena")
     assert result == FAKE_JPEG
+
+
+@pytest.mark.asyncio
+async def test_openrouter_client_empty_data_raises():
+    from app.services.openrouter_images import OpenRouterGenerationError, OpenRouterImagesClient
+
+    mock_response = AsyncMock()
+    mock_response.raise_for_status = lambda: None
+    mock_response.json = lambda: {"data": []}
+
+    mock_http = AsyncMock()
+    mock_http.post = AsyncMock(return_value=mock_response)
+    mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+    mock_http.__aexit__ = AsyncMock(return_value=None)
+
+    client = OpenRouterImagesClient(api_key="or-key")
+    with patch("app.services.openrouter_images.httpx.AsyncClient", return_value=mock_http):
+        with pytest.raises(OpenRouterGenerationError, match="missing image data"):
+            await client.generate_image("Empty response", "cena")
+
+
+@pytest.mark.asyncio
+async def test_openrouter_client_http_402_raises_quota_error():
+    from app.services.openrouter_images import OpenRouterGenerationError, OpenRouterImagesClient
+
+    mock_request = MagicMock()
+    mock_response = MagicMock()
+    mock_response.status_code = 402
+    http_error = httpx.HTTPStatusError(
+        "Payment Required",
+        request=mock_request,
+        response=mock_response,
+    )
+
+    mock_http = AsyncMock()
+
+    async def raise_402(*_args, **_kwargs):
+        raise http_error
+
+    mock_http.post = raise_402
+    mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+    mock_http.__aexit__ = AsyncMock(return_value=None)
+
+    client = OpenRouterImagesClient(api_key="or-key")
+    with patch("app.services.openrouter_images.httpx.AsyncClient", return_value=mock_http):
+        with pytest.raises(OpenRouterGenerationError, match="402"):
+            await client.generate_image("Quota test", "cena")

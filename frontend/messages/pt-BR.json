@@ -42,6 +42,9 @@
     "target": "Alvo",
     "modifier": "Modificador",
     "gmNarrates": "O Mestre narra…",
+    "preparingResponse": "Preparando a resposta…",
+    "successLevelOne": "({count} nível)",
+    "successLevelMany": "({count} níveis)",
     "pendingTest": "Resolva o teste pendente antes de continuar.",
     "fortuneRerollPrompt": "Teste falhou. Gastar Ponto de Fortuna para re-rolar?",
     "fortuneReroll": "Gastar Fortuna (re-rolar)",
@@ -70,6 +73,11 @@
     "xpGained": "XP ganho",
     "progression": "Progressão",
     "continue": "Continuar campanha"
+  },
+  "progression": {
+    "refundSection": "Compras desta sessão (reembolsáveis)",
+    "refund": "Devolver",
+    "refundBudget": "XP reembolsável restante: {remaining} / {total}"
   },
   "death": {
     "title": "Morte do Personagem",

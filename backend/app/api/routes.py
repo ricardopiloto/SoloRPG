@@ -23,6 +23,7 @@ from app.schemas.api import (
     PlayerAction,
     PregenCreate,
     ProgressionOptionsOut,
+    ProgressionRefundIn,
     ProgressionSkill,
     ProgressionTalent,
     QuickRollRequest,
@@ -54,6 +55,7 @@ from app.services.character import (
     list_characters,
     purchase_skill_advance,
     purchase_talent,
+    refund_progression_purchase,
 )
 from app.services.gm_orchestrator import GMOrchestrator
 from app.services.ownership import get_owned_campaign, get_owned_character, get_owned_session
@@ -340,7 +342,25 @@ async def api_progression_options(
             xp_available=opts["xp_available"],
             skills=opts["skills"],
             talents=opts["talents"],
+            progression_window_active=opts["progression_window_active"],
+            refund_budget_remaining=opts["refund_budget_remaining"],
+            refund_budget_total=opts["refund_budget_total"],
+            refundable_purchases=opts["refundable_purchases"],
         )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.post("/characters/{character_id}/progression/refund", response_model=CharacterOut)
+async def api_progression_refund(
+    character_id: UUID,
+    body: ProgressionRefundIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_verified_user),
+):
+    await get_owned_character(db, user, character_id)
+    try:
+        return await refund_progression_purchase(db, character_id, body.purchase_id)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
 

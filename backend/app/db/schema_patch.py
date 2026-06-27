@@ -28,5 +28,23 @@ async def apply_schema_patches(conn: AsyncConnection) -> None:
             sync_conn.execute(
                 text("ALTER TABLE player_characters ADD COLUMN is_starter BOOLEAN NOT NULL DEFAULT 0")
             )
+        if "progression_source_session_id" not in char_cols:
+            sync_conn.execute(
+                text("ALTER TABLE player_characters ADD COLUMN progression_source_session_id CHAR(32)")
+            )
+        if "progression_refund_budget" not in char_cols:
+            sync_conn.execute(
+                text(
+                    "ALTER TABLE player_characters ADD COLUMN progression_refund_budget "
+                    "INTEGER NOT NULL DEFAULT 0"
+                )
+            )
+        if "progression_purchases" not in char_cols:
+            sync_conn.execute(
+                text(
+                    "ALTER TABLE player_characters ADD COLUMN progression_purchases "
+                    "JSON NOT NULL DEFAULT '[]'"
+                )
+            )
 
     await conn.run_sync(_patch_sqlite)

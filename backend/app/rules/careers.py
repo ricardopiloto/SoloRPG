@@ -60,3 +60,27 @@ def apply_skill_advance(skills: list, skill_name: str, linked_attribute: str) ->
         *(skills or []),
         {"name": skill_name, "advances": 1, "linked_attribute": linked_attribute},
     ]
+
+
+def reverse_skill_advance(skills: list, skill_name: str) -> list:
+    for i, skill in enumerate(skills or []):
+        if skill.get("name") != skill_name:
+            continue
+        advances = skill.get("advances", 0)
+        if advances <= 0:
+            raise ValueError(f"Perícia {skill_name} sem avanços para devolver")
+        if advances <= 1:
+            return [*skills[:i], *skills[i + 1 :]]
+        return [
+            *skills[:i],
+            {**skill, "advances": advances - 1},
+            *skills[i + 1 :],
+        ]
+    raise ValueError(f"Perícia {skill_name} não encontrada")
+
+
+def reverse_talent(talents: list, talent_name: str) -> list:
+    for i, talent in enumerate(talents or []):
+        if talent.get("name") == talent_name:
+            return [*talents[:i], *talents[i + 1 :]]
+    raise ValueError(f"Talento {talent_name} não encontrado")

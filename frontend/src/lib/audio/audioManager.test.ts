@@ -34,8 +34,9 @@ function installBrowserMocks(pathname: string, options: MockAudioOptions = {}) {
       static instances: MockAudio[] = [];
       static playDelayMs = options.playDelayMs ?? 0;
 
-      constructor() {
+      constructor(url?: string) {
         MockAudio.instances.push(this);
+        if (url) this.src = url;
       }
 
       async play() {
@@ -113,16 +114,14 @@ describe("audioManager menu continuity", () => {
     assert.equal(globalThis.Audio.instances.length, 1);
   });
 
-  it("play(tensao) replaces menu playback", async () => {
+  it("play(tensao) replaces menu playback when entering session", async () => {
     await audioManager.play("menu");
-    await audioManager.play("tensao");
-    // @ts-expect-error test mock
-    assert.equal(globalThis.Audio.instances.length, 2);
     assert.equal(audiblyPlayingCount(), 1);
     // @ts-expect-error test mock
-    assert.equal(globalThis.Audio.instances[0].paused, true);
-    // @ts-expect-error test mock
-    assert.equal(globalThis.Audio.instances[1].paused, false);
+    globalThis.window.location.pathname = "/play/session-1";
+    await audioManager.play("tensao");
+    assert.equal(audiblyPlayingCount(), 1);
+    assert.equal(audioManager.getCurrentCategory(), "tensao");
   });
 
   it("stop then play(menu) creates a new Audio element", async () => {
@@ -166,5 +165,62 @@ describe("audioManager mute routing regression", () => {
     await audioManager.play("menu");
     // @ts-expect-error test mock
     assert.equal(globalThis.Audio.instances.length, 0);
+  });
+});
+
+describe("audioManager in-game moods", () => {
+  beforeEach(() => {
+    installBrowserMocks("/play/session-1");
+    // @ts-expect-error test mock
+    globalThis.Audio.instances = [];
+    audioManager.resetForTests();
+    audioManager.setMuted(false);
+  });
+
+  function lastAudioSrc(): string {
+    // @ts-expect-error test mock
+    const instances = globalThis.Audio.instances as { src: string }[];
+    return decodeURIComponent(instances[instances.length - 1]?.src ?? "");
+  }
+
+  it("play(horror) picks from supernatural pool only", async () => {
+    await audioManager.play("horror");
+    assert.match(lastAudioSrc(), /SoloRPG - Horror/);
+    assert.doesNotMatch(lastAudioSrc(), /Horror Chaos/);
+  });
+
+  it("play(horror_caos) picks from chaos pool only", async () => {
+    await audioManager.play("horror_caos");
+    assert.match(lastAudioSrc(), /Horror Chaos/);
+    assert.doesNotMatch(lastAudioSrc(), /SoloRPG - Horror\.mp3$/);
+  });
+
+  it("horror idempotent second play does not cross into chaos pool", async () => {
+    await audioManager.play("horror");
+    await audioManager.play("horror");
+    // @ts-expect-error test mock
+    assert.equal(globalThis.Audio.instances.length, 1);
+    assert.doesNotMatch(lastAudioSrc(), /Horror Chaos/);
+  });
+
+  it("combate then exploracao leaves one audible track", async () => {
+    await audioManager.play("combate");
+    await audioManager.play("exploracao");
+    assert.equal(audiblyPlayingCount(), 1);
+    assert.equal(audioManager.getCurrentCategory(), "exploracao");
+  });
+
+  it("in-game category blocked outside play route", async () => {
+    installBrowserMocks("/campaigns");
+    await audioManager.play("combate");
+    // @ts-expect-error test mock
+    assert.equal(globalThis.Audio.instances.length, 0);
+  });
+
+  it("second play(social) is idempotent", async () => {
+    await audioManager.play("social");
+    await audioManager.play("social");
+    // @ts-expect-error test mock
+    assert.equal(globalThis.Audio.instances.length, 1);
   });
 });

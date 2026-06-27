@@ -132,3 +132,26 @@ async def test_quick_roll_invalid_skill():
 
         with pytest.raises(ValueError, match="inválida"):
             await gm.execute_quick_roll(db, session.id, "skill", "Perícia Inexistente", 0)
+
+
+@pytest.mark.asyncio
+async def test_quick_roll_intuicao_skill():
+    gm = GMOrchestrator()
+    async with async_session() as db:
+        char = PlayerCharacter(
+            name="Test",
+            attributes={"I": 33},
+            skills=[{"name": "Intuição", "advances": 1}],
+        )
+        db.add(char)
+        await db.flush()
+        campaign = Campaign(character_id=char.id, status=CampaignStatus.ACTIVE)
+        db.add(campaign)
+        await db.flush()
+        session = GameSession(campaign_id=campaign.id, is_active=True)
+        db.add(session)
+        await db.commit()
+
+        result = await gm.execute_quick_roll(db, session.id, "skill", "Intuição", 0)
+        assert result.key == "Intuição"
+        assert result.target == 34  # I 33 + 1 advance

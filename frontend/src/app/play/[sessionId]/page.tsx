@@ -131,6 +131,7 @@ export default function PlayPage() {
           />
           <ChatLog
             entries={entries}
+            preparing={loading && !diceRolling}
             onImageReady={(job) => {
               if (job.image_type === "item" && job.status === "completed") {
                 void refreshCharacter();
@@ -166,9 +167,6 @@ export default function PlayPage() {
             <div className="px-5">
               <TestBlock pending={pendingTest} onRoll={rollTest} disabled={loading || diceRolling} />
             </div>
-          )}
-          {loading && !diceRolling && (
-            <p className="px-5 text-wfrp-muted text-sm animate-pulse">{t("session.gmNarrates")}</p>
           )}
 
           <div className="chat-input-area">

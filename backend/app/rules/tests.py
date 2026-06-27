@@ -13,9 +13,11 @@ class TestResult:
 
     def to_llm_text(self, attribute: str) -> str:
         outcome = "SUCESSO" if self.success else "FALHA"
+        n = abs(self.levels)
+        level_word = "nível" if n == 1 else "níveis"
         return (
             f"Teste de {attribute}: rolou {self.roll}, alvo {self.target} — "
-            f"{outcome} por {abs(self.levels)} nível(is). {self.description}"
+            f"{outcome} por {n} {level_word}. {self.description}"
         )
 
 

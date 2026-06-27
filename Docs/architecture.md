@@ -42,7 +42,7 @@ flowchart TB
 
     subgraph External
         LLM[DeepSeek API]
-        CF[Cloudflare Workers AI]
+        CF[OpenRouter Image API]
     end
 
     subgraph Data
@@ -70,7 +70,7 @@ A LLM emite blocos JSON com tags. O backend parseia e executa mecanicamente:
 | Sinal | Ação do backend |
 |-------|-----------------|
 | `[TESTE]` | Monta teste; aguarda rolagem do jogador; resolve server-side |
-| `[IMAGEM]` | Enfileira job Cloudflare Flux (assíncrono) |
+| `[IMAGEM]` | Enfileira job OpenRouter FLUX.2 Klein (assíncrono) |
 | `[FIM_SESSAO]` | Resumo, XP, karma, journal |
 | `[NOVA_CAMPANHA]` | Metadados de campanha |
 | `[ESTADO_COMBATE]` | Modo combate, iniciativa, turnos |
@@ -173,7 +173,7 @@ SoloRPG/
 |---------|-----|-----------|
 | DeepSeek | GM narrativo | `DEEPSEEK_API_KEY`, `LLM_PROVIDER` |
 | SQLite | Persistência (único backend) | `DATABASE_URL` |
-| Cloudflare Workers AI | Ilustrações | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` |
+| OpenRouter Image API | Ilustrações | `OPENROUTER_API_KEY`, `OPENROUTER_IMAGE_MODEL` |
 | SMTP | Verificação de e-mail (prod) | `SMTP_*`, `EMAIL_PROVIDER=smtp` |
 
 ---

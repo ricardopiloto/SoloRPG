@@ -21,6 +21,7 @@
 | [database-schema.md](database-schema.md) | Schema SQLite + embeddings JSON |
 | [ux-spec.md](ux-spec.md) | Paleta, tipografia, layout das telas |
 | [gm-system-prompt.md](gm-system-prompt.md) | Prompt do GM e protocolo de sinais |
+| [audio-engine.md](audio-engine.md) | Trilha ambiente (menu + tensão), roteamento, mute e sinal `[MUSICA]` |
 | [character-background-prompt.md](character-background-prompt.md) | Prompt LLM para background (wizard) |
 
 ---

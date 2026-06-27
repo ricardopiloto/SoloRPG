@@ -10,8 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db.database import async_session
 from app.db.models import Campaign, GameSession, ImageJob, MapRegion, PlayerCharacter
-from app.services.cloudflare_workers_ai import (
-    CloudflareWorkersAIClient,
+from app.services.openrouter_images import (
+    OpenRouterImagesClient,
     is_quota_or_credit_error,
 )
 
@@ -124,7 +124,7 @@ async def process_image_job(db: AsyncSession, job_id: UUID) -> None:
     job.status = "processing"
     await db.commit()
 
-    client = CloudflareWorkersAIClient()
+    client = OpenRouterImagesClient()
 
     if not client.enabled:
         job.status = "failed"

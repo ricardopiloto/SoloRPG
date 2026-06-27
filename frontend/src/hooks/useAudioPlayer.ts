@@ -3,18 +3,17 @@
 import { useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { audioManager } from "@/lib/audio/audioManager";
-import { isInGameRoute } from "@/lib/audio/audioRoutes";
+import { resolveMoodAction } from "@/lib/audio/audioMoods";
 
 export function useAudioPlayer() {
   const pathname = usePathname();
 
   const setMood = useCallback(
     (mood: string) => {
-      if (audioManager.isMuted()) return;
-      if (mood === "tensão") {
-        if (!isInGameRoute(pathname ?? "")) return;
-        void audioManager.play("tensao");
-      } else if (mood === "normal") {
+      const action = resolveMoodAction(mood, pathname ?? "", audioManager.isMuted());
+      if (action.type === "play") {
+        void audioManager.play(action.category);
+      } else if (action.type === "stop") {
         audioManager.stop();
       }
     },

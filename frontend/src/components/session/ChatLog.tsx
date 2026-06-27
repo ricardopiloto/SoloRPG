@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { MarkdownNarrative } from "./MarkdownNarrative";
 import { SceneImage } from "./SceneImage";
 import type { ImageJob } from "@/lib/api";
+import { t } from "@/lib/i18n";
 
 export type ChatEntry =
   | { kind: "narrative"; content: string; streaming?: boolean }
@@ -54,9 +55,11 @@ function isGroupStart(entries: ChatEntry[], index: number): boolean {
 
 export function ChatLog({
   entries,
+  preparing,
   onImageReady,
 }: {
   entries: ChatEntry[];
+  preparing?: boolean;
   onImageReady?: (job: ImageJob) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -80,7 +83,7 @@ export function ChatLog({
     }
 
     container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
-  }, [entries]);
+  }, [entries, preparing]);
 
   return (
     <div ref={containerRef} className="chat-log" aria-live="polite">
@@ -166,6 +169,11 @@ export function ChatLog({
           </div>
         );
       })}
+      {preparing && (
+        <p className="text-wfrp-muted text-sm animate-pulse select-none py-2">
+          {t("session.preparingResponse")}
+        </p>
+      )}
       <div aria-hidden="true" />
     </div>
   );

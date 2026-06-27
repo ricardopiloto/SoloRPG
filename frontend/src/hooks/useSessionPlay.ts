@@ -15,6 +15,8 @@ import {
 import type { ChatEntry } from "@/components/session/ChatLog";
 import type { QuickRollTarget } from "@/components/character/QuickRollPopover";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
+import { appendNarrativeFromDone } from "@/lib/session/streamNarrative";
+import { appendRollHistory, buildRollHistoryFromTurns } from "@/lib/session/rollHistory";
 
 function turnsToEntries(turns: SessionTurnOut[]): ChatEntry[] {
   return turns.flatMap((t): ChatEntry[] => {
@@ -90,6 +92,7 @@ export function useSessionPlay(sessionId: string) {
       const turns = await api.getSessionHistory(sessionId);
       if (turns.length > 0) {
         setEntries(turnsToEntries(turns));
+        setRollHistory(buildRollHistoryFromTurns(turns));
         setStarted(true);
         setShowPrepare(false);
       } else {
@@ -124,22 +127,7 @@ export function useSessionPlay(sessionId: string) {
   }, []);
 
   const appendRolls = useCallback((rolls: TurnResponse["roll_results"], spontaneous = false) => {
-    if (!rolls?.length) return;
-    const rollEntries: RollHistoryEntry[] = rolls
-      .filter((r) => r.roll !== undefined && r.target !== undefined)
-      .map((r) => ({
-        label: r.skill || r.attribute || r.type || "Rolagem",
-        roll: r.roll!,
-        target: r.target!,
-        success: r.success ?? false,
-        levels: Math.abs(Math.floor((r.target! - r.roll!) / 10)),
-        type: r.type,
-        spontaneous,
-        timestamp: Date.now(),
-      }));
-    if (rollEntries.length) {
-      setRollHistory((prev) => [...prev, ...rollEntries]);
-    }
+    setRollHistory((prev) => appendRollHistory(prev, rolls, spontaneous));
   }, []);
 
   const applyMeta = useCallback(
@@ -148,7 +136,6 @@ export function useSessionPlay(sessionId: string) {
         setMood(result.scene_mood);
       }
       appendImages(result.images);
-      appendRolls(result.roll_results);
       if (session) {
         setSession({
           ...session,
@@ -196,35 +183,19 @@ export function useSessionPlay(sessionId: string) {
         setCharacter(await api.getCharacter(character.id));
       }
     },
-    [session, character, router, appendImages, appendRolls, setMood]
+    [session, character, router, appendImages, setMood]
   );
 
   const runStreamTurn = useCallback(
     async (action: string) => {
-      let streamed = "";
       let finalResult: TurnResponse | null = null;
       for await (const event of api.streamAction(sessionId, action)) {
-        if (event.type === "token") {
-          streamed += event.content;
-          setEntries((prev) => {
-            const last = prev[prev.length - 1];
-            if (last?.kind === "narrative" && last.streaming) {
-              return [...prev.slice(0, -1), { kind: "narrative", content: streamed, streaming: true }];
-            }
-            return [...prev, { kind: "narrative", content: streamed, streaming: true }];
-          });
-        } else if (event.type === "done") {
+        if (event.type === "done") {
           finalResult = event;
         }
       }
       if (finalResult) {
-        setEntries((prev) => {
-          const trimmed = prev.filter((e) => !(e.kind === "narrative" && e.streaming));
-          if (finalResult!.narrative) {
-            return [...trimmed, { kind: "narrative", content: finalResult!.narrative }];
-          }
-          return trimmed;
-        });
+        setEntries((prev) => appendNarrativeFromDone(prev, finalResult));
         await applyMeta(finalResult);
       }
     },
@@ -260,30 +231,14 @@ export function useSessionPlay(sessionId: string) {
   );
 
   const streamRollNarrate = useCallback(async () => {
-    let streamed = "";
     let finalResult: TurnResponse | null = null;
     for await (const event of api.streamRollNarrate(sessionId)) {
-      if (event.type === "token") {
-        streamed += event.content;
-        setEntries((prev) => {
-          const last = prev[prev.length - 1];
-          if (last?.kind === "narrative" && last.streaming) {
-            return [
-              ...prev.slice(0, -1),
-              { kind: "narrative", content: streamed, streaming: true },
-            ];
-          }
-          return [...prev, { kind: "narrative", content: streamed, streaming: true }];
-        });
-      } else if (event.type === "done") {
+      if (event.type === "done") {
         finalResult = event;
       }
     }
     if (finalResult) {
-      setEntries((prev) => {
-        const trimmed = prev.filter((e) => !(e.kind === "narrative" && e.streaming));
-        return [...trimmed, { kind: "narrative", content: finalResult!.narrative }];
-      });
+      setEntries((prev) => appendNarrativeFromDone(prev, finalResult));
       await applyMeta(finalResult);
     }
   }, [sessionId, applyMeta]);
@@ -395,25 +350,25 @@ export function useSessionPlay(sessionId: string) {
             ...prev,
             { kind: "roll", content: res.narration_hint, success: res.success },
           ]);
-          setRollHistory((prev) => [
-            ...prev,
-            {
-              label: res.key,
-              roll: res.roll,
-              target: res.target,
-              success: res.success,
-              levels: Math.abs(res.levels),
-              type: res.roll_type,
-              spontaneous: true,
-              timestamp: Date.now(),
-            },
-          ]);
+          appendRolls(
+            [
+              {
+                type: res.roll_type,
+                roll: res.roll,
+                target: res.target,
+                success: res.success,
+                levels: res.levels,
+                skill: res.key,
+              },
+            ],
+            true
+          );
         }
       } finally {
         setLoading(false);
       }
     },
-    [sessionId, session, character, applyRollResponse, streamRollNarrate]
+    [sessionId, session, character, applyRollResponse, streamRollNarrate, appendRolls]
   );
 
   const quickRoll = useCallback((target: QuickRollTarget, modifier: number): Promise<void> => {
